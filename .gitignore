@@ -1,0 +1,11 @@
+# Exported workbooks (one per day; large binaries)
+transcripts/
+*.xlsx
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
