@@ -26,6 +26,7 @@ from openpyxl import load_workbook
 HERE = Path(__file__).resolve().parent
 TRANSCRIPTS_DIR = HERE / "transcripts"
 OUT_PATH = HERE / "escalation_analysis.json"
+TAXONOMY_PATH = HERE / "tag_taxonomy.json"  # giga tags list -f json > tag_taxonomy.json
 
 ROW_DIM = "intent"
 COL_DIMS = {
@@ -74,11 +75,47 @@ def bucket_values(rows, dim, top, missing_label):
     return keep, counts
 
 
+def load_tag_taxonomy():
+    """tag name -> intent name, from `giga tags list -f json`. Empty if absent."""
+    if not TAXONOMY_PATH.exists():
+        print(f"note: {TAXONOMY_PATH.name} not found — intents will not be "
+              f"derived from tags for pre-analysis-era tickets", file=sys.stderr)
+        return {}
+    # GreetingOnly / RequestHumanSupport describe the conversation's shape, not
+    # its topic (both map to OutOfDomain, which the SOP-gap proxy reads as a
+    # gap) — never derive a topical intent from them.
+    skip = {"GreetingOnly", "RequestHumanSupport"}
+    return {t["name"]: t["intentName"]
+            for t in json.loads(TAXONOMY_PATH.read_text())["tags"]
+            if t["name"] not in skip}
+
+
 def main():
     rows, days = load_tickets()
+
+    # Noise filter: drop conversations with at most one message (counting all
+    # roles — agent, tool, system included).
+    before = len(rows)
+    rows = [r for r in rows if int(r.get("messageCount") or 0) > 1]
+    print(f"noise filter: removed {before - len(rows)} conversations with <=1 message "
+          f"({(before - len(rows)) / before:.1%} of {before})")
+
+    tag_to_intent = load_tag_taxonomy()
+    derived = 0
     for r in rows:
+        # Intent classification only exists on recent tickets; before that,
+        # derive it from the first analysis tag the taxonomy still knows.
+        # (Before _gap: the SOP-gap proxy reads the intent.)
+        if not norm(r.get("intent"), ""):
+            for tag in (norm(r.get("tags"), "") or "").split(", "):
+                if tag in tag_to_intent:
+                    r["intent"] = tag_to_intent[tag]
+                    derived += 1
+                    break
         r["_esc"] = str(r.get("escalated")) == "True"
         r["_gap"] = r["_esc"] and is_sop_gap(r)
+    if derived:
+        print(f"derived intent from tags for {derived} tickets")
 
     intents, intent_counts = bucket_values(rows, ROW_DIM, 99, "(no intent)")
     row_labels = [v for v in intents if intent_counts[v] >= MIN_ROW_TICKETS]
