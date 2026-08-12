@@ -226,6 +226,7 @@ def write_csv(path: Path, columns, rows):
 def write_xlsx(path: Path, ticket_rows, message_rows) -> bool:
     try:
         from openpyxl import Workbook
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
     except ImportError:
         return False
 
@@ -238,7 +239,8 @@ def write_xlsx(path: Path, ticket_rows, message_rows) -> bool:
         sheet.append(columns)
         for row in rows:
             sheet.append([
-                str(row.get(col, ""))[:EXCEL_CELL_LIMIT] if row.get(col) is not None else ""
+                ILLEGAL_CHARACTERS_RE.sub("", str(row.get(col, "")))[:EXCEL_CELL_LIMIT]
+                if row.get(col) is not None else ""
                 for col in columns
             ])
         sheet.freeze_panes = "A2"
