@@ -51,6 +51,32 @@ TICKET_COLUMNS = [
     "agentTemplateId", "fromNumber", "toNumber", "emailFrom", "isOutbound",
     "languageCode", "callDurationMs", "transferTo", "intent", "summary",
     "resolutionStatus", "sentiment", "csat", "tags", "messageCount",
+    # Bucketing fields from the conversation's variable store (last write wins)
+    "serviceIssueCode", "integrationType", "autopayStatus", "fulfillmentStatus",
+    "transferReason", "gigaTags",
+    # Escalation markers
+    "escalated", "ticketBodyTag",
+    # Analytics custom fields (cf_* mirrors customFields[].fieldName)
+    "cf_activated_policies", "cf_is_out_of_scope", "cf_create_ticket_expected",
+    "cf_immediate_agent_request", "cf_immediate_transfer_request",
+    "cf_proactive_transfer", "cf_resolved_status", "cf_abandoned_lenient",
+    "cf_zendesk_ticket_creation_confirmed", "cf_zendesk_ticket_sync_status",
+]
+
+# variableStore key -> ticket column
+VARIABLE_STORE_COLUMNS = {
+    "service_issue_code": "serviceIssueCode",
+    "customer_integration_type": "integrationType",
+    "autopay_status": "autopayStatus",
+    "fulfillment_status": "fulfillmentStatus",
+    "transfer_reason": "transferReason",
+    "giga_tags": "gigaTags",
+}
+CUSTOM_FIELD_COLUMNS = [
+    "activated_policies", "is_out_of_scope", "create_ticket_expected",
+    "immediate_agent_request", "immediate_transfer_request",
+    "proactive_transfer", "resolved_status", "abandoned_lenient",
+    "zendesk_ticket_creation_confirmed", "zendesk_ticket_sync_status",
 ]
 MESSAGE_COLUMNS = [
     "ticketId", "conversationId", "agentName", "messageIndex", "sentAt",
@@ -96,6 +122,31 @@ def run_download(args, json_dir: Path) -> None:
         sys.exit(f"error: giga tickets download failed (exit {result.returncode})")
 
 
+def tool_call_name(tool_call):
+    return tool_call.get("name") or (tool_call.get("function") or {}).get("name") or ""
+
+
+def extract_escalation(messages):
+    """Return (escalated, ticket_body_tag) from create_ticket tool calls."""
+    for message in messages:
+        for tool_call in message.get("toolCalls") or []:
+            if tool_call_name(tool_call) == "create_ticket":
+                raw = (tool_call.get("function") or {}).get("arguments") or "{}"
+                try:
+                    tag = json.loads(raw).get("ticket_body_tag", "")
+                except json.JSONDecodeError:
+                    tag = ""
+                return True, tag
+    return False, ""
+
+
+def custom_field_value(field):
+    for key in ("stringVal", "numberVal", "booleanVal", "jsonVal"):
+        if field.get(key) is not None:
+            return field[key]
+    return ""
+
+
 def flatten(json_dir: Path):
     ticket_rows, message_rows = [], []
     files = sorted(p for p in json_dir.rglob("*.json") if p.name != "stats.txt")
@@ -108,6 +159,14 @@ def flatten(json_dir: Path):
 
         analysis = ticket.get("analysis") or {}
         messages = ticket.get("messages") or []
+
+        # Merge per-message variable stores in order, so later writes win.
+        variables = {}
+        for message in messages:
+            if isinstance(message.get("variableStore"), dict):
+                variables.update(message["variableStore"])
+        custom = {f["fieldName"]: custom_field_value(f) for f in ticket.get("customFields") or []}
+        escalated, ticket_body_tag = extract_escalation(messages)
         ticket_rows.append({
             "id": ticket.get("id", ""),
             "conversationId": ticket.get("conversationId", ""),
@@ -135,6 +194,11 @@ def flatten(json_dir: Path):
             "csat": analysis.get("csat", ""),
             "tags": ", ".join(analysis.get("tags") or []),
             "messageCount": len(messages),
+            **{col: variables.get(key, "") if variables.get(key) is not None else ""
+               for key, col in VARIABLE_STORE_COLUMNS.items()},
+            "escalated": escalated,
+            "ticketBodyTag": ticket_body_tag,
+            **{f"cf_{name}": custom.get(name, "") for name in CUSTOM_FIELD_COLUMNS},
         })
         for message in messages:
             tool_calls = message.get("toolCalls")
