@@ -3,6 +3,9 @@ transcripts/
 *.xlsx
 *.csv
 
+# Derived analysis output (regenerate with analyze_transcripts.py)
+escalation_analysis.json
+
 # Python
 __pycache__/
 *.pyc
