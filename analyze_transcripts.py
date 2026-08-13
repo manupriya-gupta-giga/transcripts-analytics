@@ -28,6 +28,10 @@ TRANSCRIPTS_DIR = HERE / "transcripts"
 OUT_PATH = HERE / "escalation_analysis.json"
 TAXONOMY_PATH = HERE / "tag_taxonomy.json"  # giga tags list -f json > tag_taxonomy.json
 
+# Days excluded from analysis (workbooks stay on disk, they are just not read).
+# 2026-08-04: data flagged inaccurate.
+EXCLUDE_DAYS = {"2026-08-04"}
+
 ROW_DIM = "intent"
 COL_DIMS = {
     "integrationType": {"label": "Integration type", "top": 8},
@@ -54,6 +58,10 @@ def is_sop_gap(row):
 def load_tickets():
     rows, days = [], []
     for path in sorted(TRANSCRIPTS_DIR.glob("transcripts_*.xlsx")):
+        day = path.stem.removeprefix("transcripts_")
+        if day in EXCLUDE_DAYS:
+            print(f"excluding {day} ({path.name})")
+            continue
         sheet = load_workbook(path, read_only=True)["Tickets"]
         it = sheet.iter_rows(values_only=True)
         header = next(it)
