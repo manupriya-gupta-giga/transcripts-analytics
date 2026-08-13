@@ -1,0 +1,2089 @@
+<title>CS Chat Escalation Map</title>
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+  --muted: #898781; --grid: #e1e0d9; --border: rgba(11,11,11,.10);
+  --accent: #2a78d6; --cell-empty: #f3f2ee;
+  --ramp-0: #cde2fb; --ramp-1: #9ec5f4; --ramp-2: #6da7ec; --ramp-3: #3987e5;
+  --ramp-4: #256abf; --ramp-5: #184f95; --ramp-6: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --border: rgba(255,255,255,.10);
+    --accent: #3987e5; --cell-empty: #232322;
+    --ramp-0: #0d366b; --ramp-1: #104281; --ramp-2: #184f95; --ramp-3: #2a78d6;
+    --ramp-4: #5598e7; --ramp-5: #86b6ef; --ramp-6: #b7d3f6;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+  --muted: #898781; --grid: #2c2c2a; --border: rgba(255,255,255,.10);
+  --accent: #3987e5; --cell-empty: #232322;
+  --ramp-0: #0d366b; --ramp-1: #104281; --ramp-2: #184f95; --ramp-3: #2a78d6;
+  --ramp-4: #5598e7; --ramp-5: #86b6ef; --ramp-6: #b7d3f6;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px 64px; }
+header h1 { font-size: 26px; font-weight: 650; margin: 0 0 4px; text-wrap: balance; }
+header .sub { color: var(--ink-2); margin: 0; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 28px 0; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.kpi .v { font-size: 30px; font-weight: 600; line-height: 1.15; }
+.kpi .d { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 20px; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.seg button {
+  border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13.5px;
+  padding: 6px 14px; border-radius: 6px; cursor: pointer;
+}
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+.controls .hint { color: var(--muted); font-size: 13px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px 14px; }
+.card h2 { font-size: 15px; font-weight: 650; margin: 2px 0 12px; }
+.hm-scroll { overflow-x: auto; }
+.hm { border-collapse: separate; border-spacing: 2px; width: 100%; }
+.hm th { font-weight: 500; color: var(--ink-2); font-size: 12px; }
+.hm thead th { vertical-align: bottom; padding: 0 2px 4px; max-width: 76px; }
+.hm thead th span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); max-height: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm.flat thead th { max-width: none; }
+.hm.flat thead th span { writing-mode: horizontal-tb; transform: none; max-height: none; white-space: normal; overflow-wrap: anywhere; max-width: 130px; }
+.hm tbody th { text-align: right; padding-right: 8px; white-space: nowrap; width: 160px; }
+.hm td {
+  min-width: 58px; height: 36px; border-radius: 3px; background: var(--cell-empty);
+  text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; cursor: default;
+}
+.hm td:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+.legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.legend .bar { height: 8px; width: 140px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--ramp-0), var(--ramp-2), var(--ramp-4), var(--ramp-6)); }
+
+#tip {
+  position: fixed; pointer-events: none; display: none; z-index: 10; max-width: 300px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 8px 11px; font-size: 13px;
+}
+#tip .t { font-weight: 600; } #tip .m { color: var(--ink-2); }
+
+.note { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-top: 24px; }
+.note h2 { font-size: 15px; margin: 0 0 8px; }
+.note p, .note li { color: var(--ink-2); font-size: 14px; }
+.note code { background: var(--cell-empty); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
+details { margin-top: 16px; }
+summary { cursor: pointer; font-weight: 600; }
+.tbl-scroll { overflow-x: auto; margin-top: 10px; }
+table.data { border-collapse: collapse; font-size: 13px; }
+table.data th, table.data td { padding: 4px 10px; border-bottom: 1px solid var(--grid); text-align: right; font-variant-numeric: tabular-nums; }
+table.data th:first-child, table.data td:first-child,
+table.data th:nth-child(2), table.data td:nth-child(2) { text-align: left; }
+table.data thead th { color: var(--ink-2); font-weight: 600; }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Flex · Customer Support Chat Agent</p>
+  <h1>Where chats escalate to humans</h1>
+  <p class="sub" id="scope"></p>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="controls">
+  <div class="seg" role="group" aria-label="Metric" id="metricSeg">
+    <button data-m="e" aria-pressed="true">Escalations</button>
+    <button data-m="rate" aria-pressed="false">Escalation rate</button>
+    <button data-m="g" aria-pressed="false">SOP-gap escalations</button>
+  </div>
+  <span class="hint" id="hint"></span>
+</div>
+
+<div class="grid2" id="maps"></div>
+
+<div class="note">
+  <h2>How to read this</h2>
+  <p><strong>Noise filter:</strong> conversations with at most one message (all roles counted)
+  are excluded — 5,639 of 83,796 (6.7%); none of them had escalated.</p>
+  <p>Every ticket is bucketed by the <strong>intent</strong> the analysis pipeline assigned
+  (rows, hottest first) and by four account attributes captured in the conversation's variable
+  store (one heatmap per attribute). Cell color is the selected metric; hover any cell for
+  ticket counts, escalations, rate, and SOP-gap count. Rate cells with fewer than 10 tickets
+  stay uncolored — too small to trust a percentage.</p>
+  <ul>
+    <li><strong>Escalated</strong> — the agent called <code>create_ticket</code>, i.e. filed a support
+    ticket for a human team.</li>
+    <li><strong>SOP-gap escalation (proxy)</strong> — an escalation that shows no sign of a specific
+    matching rule: ticket filed under the catch-all <code>general_escalation</code> tag, or the
+    conversation was flagged <code>is_out_of_scope</code>, or intent classified
+    <code>OutOfDomain</code>. Policy-driven escalations (hardship, fraud, eviction language …)
+    carry their specific scenario tag and are excluded.</li>
+    <li><strong>Intent</strong> — native from the analysis pipeline where available (Aug 8
+    onward); earlier tickets get their intent derived from the first analysis tag the current
+    tag→intent taxonomy recognizes (45,415 of 83,796 derived). Shape-of-conversation tags
+    (<code>GreetingOnly</code>, <code>RequestHumanSupport</code>) never derive an intent.
+    <code>(no intent)</code> = neither available — mostly greeting-only or untagged sessions.</li>
+    <li><code>(none)</code> means the attribute was never populated in that conversation's variable
+    store — typically short sessions that ended before account lookup.</li>
+  </ul>
+  <details>
+    <summary>Table view (all buckets)</summary>
+    <div class="tbl-scroll"><table class="data" id="dataTable"></table></div>
+  </details>
+</div>
+</div>
+
+<div id="tip" role="status"></div>
+
+<script>
+const DATA = {
+ "days": [
+  "2026-07-10",
+  "2026-07-11",
+  "2026-07-12",
+  "2026-07-13",
+  "2026-07-14",
+  "2026-07-15",
+  "2026-07-16",
+  "2026-07-17",
+  "2026-07-18",
+  "2026-07-19",
+  "2026-07-20",
+  "2026-07-21",
+  "2026-07-22",
+  "2026-07-23",
+  "2026-07-24",
+  "2026-07-25",
+  "2026-07-26",
+  "2026-07-27",
+  "2026-07-28",
+  "2026-07-29",
+  "2026-07-30",
+  "2026-07-31",
+  "2026-08-01",
+  "2026-08-02",
+  "2026-08-03",
+  "2026-08-04",
+  "2026-08-05",
+  "2026-08-06",
+  "2026-08-07",
+  "2026-08-08",
+  "2026-08-09",
+  "2026-08-10",
+  "2026-08-11"
+ ],
+ "totals": {
+  "tickets": 78157,
+  "escalated": 12701,
+  "sopGap": 1274
+ },
+ "rowDim": "intent",
+ "rows": [
+  "Payment",
+  "RentToProperty",
+  "(no intent)",
+  "Account",
+  "FlexAnywhere",
+  "CreditAndPricing",
+  "ChargeAndRefund",
+  "AppOrSystem",
+  "FlexProduct",
+  "EscalationAndFraud",
+  "GeneralAndFeedback",
+  "OutOfDomain"
+ ],
+ "matrices": {
+  "integrationType": {
+   "label": "Integration type",
+   "cols": [
+    "direct_integration",
+    "flex_anywhere",
+    "(none)",
+    "p2p",
+    "portal"
+   ],
+   "cells": [
+    [
+     {
+      "n": 14980,
+      "e": 3834,
+      "g": 171
+     },
+     {
+      "n": 3955,
+      "e": 1119,
+      "g": 44
+     },
+     {
+      "n": 910,
+      "e": 351,
+      "g": 30
+     },
+     {
+      "n": 253,
+      "e": 68,
+      "g": 5
+     },
+     {
+      "n": 18,
+      "e": 8,
+      "g": 2
+     }
+    ],
+    [
+     {
+      "n": 8313,
+      "e": 2428,
+      "g": 143
+     },
+     {
+      "n": 2840,
+      "e": 551,
+      "g": 57
+     },
+     {
+      "n": 611,
+      "e": 180,
+      "g": 10
+     },
+     {
+      "n": 176,
+      "e": 46,
+      "g": 4
+     },
+     {
+      "n": 11,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 15662,
+      "e": 781,
+      "g": 135
+     },
+     {
+      "n": 5620,
+      "e": 305,
+      "g": 64
+     },
+     {
+      "n": 5544,
+      "e": 134,
+      "g": 49
+     },
+     {
+      "n": 355,
+      "e": 17,
+      "g": 10
+     },
+     {
+      "n": 47,
+      "e": 5,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 1349,
+      "e": 370,
+      "g": 175
+     },
+     {
+      "n": 475,
+      "e": 126,
+      "g": 60
+     },
+     {
+      "n": 84,
+      "e": 23,
+      "g": 11
+     },
+     {
+      "n": 47,
+      "e": 18,
+      "g": 11
+     },
+     {
+      "n": 3,
+      "e": 1,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 378,
+      "e": 55,
+      "g": 3
+     },
+     {
+      "n": 2541,
+      "e": 332,
+      "g": 29
+     },
+     {
+      "n": 486,
+      "e": 75,
+      "g": 4
+     },
+     {
+      "n": 91,
+      "e": 17,
+      "g": 1
+     },
+     {
+      "n": 7,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 4020,
+      "e": 307,
+      "g": 54
+     },
+     {
+      "n": 1329,
+      "e": 113,
+      "g": 8
+     },
+     {
+      "n": 202,
+      "e": 41,
+      "g": 6
+     },
+     {
+      "n": 60,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 4,
+      "e": 1,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 490,
+      "e": 312,
+      "g": 2
+     },
+     {
+      "n": 173,
+      "e": 110,
+      "g": 0
+     },
+     {
+      "n": 31,
+      "e": 24,
+      "g": 1
+     },
+     {
+      "n": 6,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 2,
+      "e": 1,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 541,
+      "e": 210,
+      "g": 57
+     },
+     {
+      "n": 322,
+      "e": 113,
+      "g": 19
+     },
+     {
+      "n": 269,
+      "e": 80,
+      "g": 21
+     },
+     {
+      "n": 40,
+      "e": 9,
+      "g": 2
+     },
+     {
+      "n": 4,
+      "e": 2,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 1937,
+      "e": 165,
+      "g": 29
+     },
+     {
+      "n": 1015,
+      "e": 40,
+      "g": 8
+     },
+     {
+      "n": 275,
+      "e": 21,
+      "g": 3
+     },
+     {
+      "n": 71,
+      "e": 4,
+      "g": 4
+     },
+     {
+      "n": 6,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 239,
+      "e": 177,
+      "g": 5
+     },
+     {
+      "n": 50,
+      "e": 36,
+      "g": 2
+     },
+     {
+      "n": 15,
+      "e": 5,
+      "g": 1
+     },
+     {
+      "n": 3,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 164,
+      "e": 32,
+      "g": 5
+     },
+     {
+      "n": 54,
+      "e": 15,
+      "g": 4
+     },
+     {
+      "n": 32,
+      "e": 14,
+      "g": 8
+     },
+     {
+      "n": 6,
+      "e": 2,
+      "g": 1
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 1056,
+      "e": 7,
+      "g": 7
+     },
+     {
+      "n": 336,
+      "e": 3,
+      "g": 3
+     },
+     {
+      "n": 609,
+      "e": 3,
+      "g": 3
+     },
+     {
+      "n": 35,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 5,
+      "e": 0,
+      "g": 0
+     }
+    ]
+   ]
+  },
+  "autopayStatus": {
+   "label": "Autopay status",
+   "cols": [
+    "ACTIVE",
+    "not applicable",
+    "EPISODIC",
+    "(none)",
+    "CANCELLED",
+    "PAUSED"
+   ],
+   "cells": [
+    [
+     {
+      "n": 10348,
+      "e": 2519,
+      "g": 88
+     },
+     {
+      "n": 3962,
+      "e": 1121,
+      "g": 44
+     },
+     {
+      "n": 4292,
+      "e": 1133,
+      "g": 62
+     },
+     {
+      "n": 1197,
+      "e": 445,
+      "g": 44
+     },
+     {
+      "n": 252,
+      "e": 122,
+      "g": 13
+     },
+     {
+      "n": 65,
+      "e": 40,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 5885,
+      "e": 1666,
+      "g": 95
+     },
+     {
+      "n": 2844,
+      "e": 552,
+      "g": 57
+     },
+     {
+      "n": 2289,
+      "e": 719,
+      "g": 40
+     },
+     {
+      "n": 809,
+      "e": 225,
+      "g": 13
+     },
+     {
+      "n": 111,
+      "e": 43,
+      "g": 9
+     },
+     {
+      "n": 13,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 9374,
+      "e": 376,
+      "g": 52
+     },
+     {
+      "n": 5626,
+      "e": 305,
+      "g": 64
+     },
+     {
+      "n": 4833,
+      "e": 235,
+      "g": 46
+     },
+     {
+      "n": 6392,
+      "e": 192,
+      "g": 80
+     },
+     {
+      "n": 650,
+      "e": 124,
+      "g": 15
+     },
+     {
+      "n": 353,
+      "e": 10,
+      "g": 2
+     }
+    ],
+    [
+     {
+      "n": 243,
+      "e": 73,
+      "g": 13
+     },
+     {
+      "n": 476,
+      "e": 126,
+      "g": 60
+     },
+     {
+      "n": 311,
+      "e": 76,
+      "g": 32
+     },
+     {
+      "n": 400,
+      "e": 134,
+      "g": 90
+     },
+     {
+      "n": 80,
+      "e": 22,
+      "g": 9
+     },
+     {
+      "n": 448,
+      "e": 107,
+      "g": 54
+     }
+    ],
+    [
+     {
+      "n": 167,
+      "e": 26,
+      "g": 4
+     },
+     {
+      "n": 2542,
+      "e": 332,
+      "g": 29
+     },
+     {
+      "n": 106,
+      "e": 12,
+      "g": 0
+     },
+     {
+      "n": 663,
+      "e": 106,
+      "g": 4
+     },
+     {
+      "n": 22,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 2304,
+      "e": 155,
+      "g": 22
+     },
+     {
+      "n": 1330,
+      "e": 113,
+      "g": 8
+     },
+     {
+      "n": 1617,
+      "e": 113,
+      "g": 17
+     },
+     {
+      "n": 300,
+      "e": 59,
+      "g": 19
+     },
+     {
+      "n": 49,
+      "e": 17,
+      "g": 1
+     },
+     {
+      "n": 15,
+      "e": 6,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 303,
+      "e": 194,
+      "g": 1
+     },
+     {
+      "n": 173,
+      "e": 110,
+      "g": 0
+     },
+     {
+      "n": 160,
+      "e": 98,
+      "g": 0
+     },
+     {
+      "n": 34,
+      "e": 25,
+      "g": 1
+     },
+     {
+      "n": 28,
+      "e": 21,
+      "g": 1
+     },
+     {
+      "n": 4,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 168,
+      "e": 59,
+      "g": 10
+     },
+     {
+      "n": 322,
+      "e": 113,
+      "g": 19
+     },
+     {
+      "n": 84,
+      "e": 32,
+      "g": 6
+     },
+     {
+      "n": 550,
+      "e": 183,
+      "g": 60
+     },
+     {
+      "n": 43,
+      "e": 23,
+      "g": 3
+     },
+     {
+      "n": 9,
+      "e": 4,
+      "g": 2
+     }
+    ],
+    [
+     {
+      "n": 1148,
+      "e": 87,
+      "g": 14
+     },
+     {
+      "n": 1015,
+      "e": 40,
+      "g": 8
+     },
+     {
+      "n": 655,
+      "e": 56,
+      "g": 12
+     },
+     {
+      "n": 412,
+      "e": 33,
+      "g": 8
+     },
+     {
+      "n": 65,
+      "e": 12,
+      "g": 2
+     },
+     {
+      "n": 9,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 137,
+      "e": 98,
+      "g": 3
+     },
+     {
+      "n": 50,
+      "e": 36,
+      "g": 2
+     },
+     {
+      "n": 88,
+      "e": 65,
+      "g": 2
+     },
+     {
+      "n": 19,
+      "e": 8,
+      "g": 1
+     },
+     {
+      "n": 12,
+      "e": 12,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 107,
+      "e": 21,
+      "g": 3
+     },
+     {
+      "n": 54,
+      "e": 15,
+      "g": 4
+     },
+     {
+      "n": 43,
+      "e": 9,
+      "g": 2
+     },
+     {
+      "n": 45,
+      "e": 17,
+      "g": 9
+     },
+     {
+      "n": 6,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 631,
+      "e": 6,
+      "g": 6
+     },
+     {
+      "n": 336,
+      "e": 3,
+      "g": 3
+     },
+     {
+      "n": 335,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 685,
+      "e": 3,
+      "g": 3
+     },
+     {
+      "n": 35,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 19,
+      "e": 0,
+      "g": 0
+     }
+    ]
+   ]
+  },
+  "fulfillmentStatus": {
+   "label": "Fulfillment status",
+   "cols": [
+    "(none)",
+    "SUCCESS",
+    "CANCELED",
+    "RETRY_WAIT",
+    "PAUSED",
+    "DELAY_WAIT",
+    "REPLACED"
+   ],
+   "cells": [
+    [
+     {
+      "n": 7879,
+      "e": 2094,
+      "g": 138
+     },
+     {
+      "n": 2830,
+      "e": 684,
+      "g": 45
+     },
+     {
+      "n": 4932,
+      "e": 1513,
+      "g": 26
+     },
+     {
+      "n": 3203,
+      "e": 784,
+      "g": 33
+     },
+     {
+      "n": 876,
+      "e": 190,
+      "g": 7
+     },
+     {
+      "n": 388,
+      "e": 113,
+      "g": 3
+     },
+     {
+      "n": 8,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 5832,
+      "e": 1360,
+      "g": 118
+     },
+     {
+      "n": 1486,
+      "e": 380,
+      "g": 60
+     },
+     {
+      "n": 1220,
+      "e": 465,
+      "g": 10
+     },
+     {
+      "n": 2626,
+      "e": 668,
+      "g": 19
+     },
+     {
+      "n": 271,
+      "e": 116,
+      "g": 1
+     },
+     {
+      "n": 512,
+      "e": 214,
+      "g": 6
+     },
+     {
+      "n": 4,
+      "e": 4,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 16311,
+      "e": 737,
+      "g": 192
+     },
+     {
+      "n": 3902,
+      "e": 291,
+      "g": 37
+     },
+     {
+      "n": 2970,
+      "e": 103,
+      "g": 20
+     },
+     {
+      "n": 2915,
+      "e": 72,
+      "g": 7
+     },
+     {
+      "n": 585,
+      "e": 23,
+      "g": 3
+     },
+     {
+      "n": 536,
+      "e": 16,
+      "g": 0
+     },
+     {
+      "n": 9,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 1556,
+      "e": 416,
+      "g": 234
+     },
+     {
+      "n": 103,
+      "e": 28,
+      "g": 6
+     },
+     {
+      "n": 235,
+      "e": 64,
+      "g": 16
+     },
+     {
+      "n": 49,
+      "e": 26,
+      "g": 2
+     },
+     {
+      "n": 8,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 6,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 3011,
+      "e": 382,
+      "g": 33
+     },
+     {
+      "n": 131,
+      "e": 16,
+      "g": 2
+     },
+     {
+      "n": 131,
+      "e": 32,
+      "g": 1
+     },
+     {
+      "n": 213,
+      "e": 44,
+      "g": 1
+     },
+     {
+      "n": 9,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 7,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 3177,
+      "e": 275,
+      "g": 45
+     },
+     {
+      "n": 1246,
+      "e": 88,
+      "g": 13
+     },
+     {
+      "n": 402,
+      "e": 30,
+      "g": 3
+     },
+     {
+      "n": 603,
+      "e": 61,
+      "g": 6
+     },
+     {
+      "n": 118,
+      "e": 6,
+      "g": 1
+     },
+     {
+      "n": 68,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 161,
+      "e": 112,
+      "g": 1
+     },
+     {
+      "n": 301,
+      "e": 183,
+      "g": 1
+     },
+     {
+      "n": 150,
+      "e": 91,
+      "g": 1
+     },
+     {
+      "n": 59,
+      "e": 42,
+      "g": 0
+     },
+     {
+      "n": 6,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 25,
+      "e": 17,
+      "g": 0
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 1003,
+      "e": 356,
+      "g": 90
+     },
+     {
+      "n": 68,
+      "e": 26,
+      "g": 9
+     },
+     {
+      "n": 48,
+      "e": 13,
+      "g": 1
+     },
+     {
+      "n": 46,
+      "e": 16,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 8,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 2080,
+      "e": 129,
+      "g": 29
+     },
+     {
+      "n": 661,
+      "e": 46,
+      "g": 10
+     },
+     {
+      "n": 185,
+      "e": 21,
+      "g": 1
+     },
+     {
+      "n": 255,
+      "e": 16,
+      "g": 4
+     },
+     {
+      "n": 43,
+      "e": 4,
+      "g": 0
+     },
+     {
+      "n": 79,
+      "e": 14,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 129,
+      "e": 94,
+      "g": 4
+     },
+     {
+      "n": 83,
+      "e": 56,
+      "g": 3
+     },
+     {
+      "n": 52,
+      "e": 41,
+      "g": 1
+     },
+     {
+      "n": 30,
+      "e": 23,
+      "g": 0
+     },
+     {
+      "n": 9,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 4,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 132,
+      "e": 39,
+      "g": 11
+     },
+     {
+      "n": 80,
+      "e": 10,
+      "g": 5
+     },
+     {
+      "n": 17,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 18,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 4,
+      "e": 2,
+      "g": 1
+     },
+     {
+      "n": 5,
+      "e": 2,
+      "g": 1
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 1201,
+      "e": 8,
+      "g": 8
+     },
+     {
+      "n": 208,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 518,
+      "e": 4,
+      "g": 4
+     },
+     {
+      "n": 71,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 17,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 26,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 0,
+      "e": 0,
+      "g": 0
+     }
+    ]
+   ]
+  },
+  "serviceIssueCode": {
+   "label": "Service issue code",
+   "cols": [
+    "(none)",
+    "CLOSE_CANDIDATE",
+    "BILLING_NO_RENT_POSTED",
+    "PAYMENT_INSUFFICIENT_FUND",
+    "BILLING_EMBARGO",
+    "BILL_PULL_IN_PROGRESS",
+    "ANYWHERE_VC_READY",
+    "ANYWHERE_DDA_SETTLED",
+    "Other"
+   ],
+   "cells": [
+    [
+     {
+      "n": 10451,
+      "e": 2717,
+      "g": 179
+     },
+     {
+      "n": 6075,
+      "e": 1574,
+      "g": 42
+     },
+     {
+      "n": 479,
+      "e": 155,
+      "g": 3
+     },
+     {
+      "n": 914,
+      "e": 278,
+      "g": 8
+     },
+     {
+      "n": 182,
+      "e": 30,
+      "g": 2
+     },
+     {
+      "n": 197,
+      "e": 41,
+      "g": 3
+     },
+     {
+      "n": 186,
+      "e": 81,
+      "g": 0
+     },
+     {
+      "n": 217,
+      "e": 54,
+      "g": 3
+     },
+     {
+      "n": 1415,
+      "e": 450,
+      "g": 12
+     }
+    ],
+    [
+     {
+      "n": 7232,
+      "e": 1712,
+      "g": 169
+     },
+     {
+      "n": 1644,
+      "e": 683,
+      "g": 11
+     },
+     {
+      "n": 961,
+      "e": 229,
+      "g": 4
+     },
+     {
+      "n": 98,
+      "e": 28,
+      "g": 1
+     },
+     {
+      "n": 508,
+      "e": 98,
+      "g": 5
+     },
+     {
+      "n": 379,
+      "e": 65,
+      "g": 6
+     },
+     {
+      "n": 151,
+      "e": 43,
+      "g": 0
+     },
+     {
+      "n": 90,
+      "e": 28,
+      "g": 6
+     },
+     {
+      "n": 888,
+      "e": 321,
+      "g": 12
+     }
+    ],
+    [
+     {
+      "n": 19887,
+      "e": 1003,
+      "g": 224
+     },
+     {
+      "n": 3749,
+      "e": 75,
+      "g": 11
+     },
+     {
+      "n": 675,
+      "e": 24,
+      "g": 4
+     },
+     {
+      "n": 418,
+      "e": 6,
+      "g": 1
+     },
+     {
+      "n": 309,
+      "e": 8,
+      "g": 0
+     },
+     {
+      "n": 279,
+      "e": 7,
+      "g": 0
+     },
+     {
+      "n": 270,
+      "e": 7,
+      "g": 3
+     },
+     {
+      "n": 320,
+      "e": 24,
+      "g": 3
+     },
+     {
+      "n": 1321,
+      "e": 88,
+      "g": 13
+     }
+    ],
+    [
+     {
+      "n": 1644,
+      "e": 435,
+      "g": 237
+     },
+     {
+      "n": 154,
+      "e": 57,
+      "g": 12
+     },
+     {
+      "n": 19,
+      "e": 3,
+      "g": 1
+     },
+     {
+      "n": 14,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 4,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 4,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 12,
+      "e": 7,
+      "g": 2
+     },
+     {
+      "n": 104,
+      "e": 32,
+      "g": 5
+     }
+    ],
+    [
+     {
+      "n": 3099,
+      "e": 394,
+      "g": 34
+     },
+     {
+      "n": 34,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 10,
+      "e": 4,
+      "g": 0
+     },
+     {
+      "n": 45,
+      "e": 11,
+      "g": 0
+     },
+     {
+      "n": 7,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 8,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 193,
+      "e": 47,
+      "g": 2
+     },
+     {
+      "n": 28,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 79,
+      "e": 18,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 4291,
+      "e": 354,
+      "g": 58
+     },
+     {
+      "n": 703,
+      "e": 43,
+      "g": 8
+     },
+     {
+      "n": 58,
+      "e": 6,
+      "g": 0
+     },
+     {
+      "n": 70,
+      "e": 2,
+      "g": 1
+     },
+     {
+      "n": 68,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 84,
+      "e": 4,
+      "g": 0
+     },
+     {
+      "n": 68,
+      "e": 31,
+      "g": 1
+     },
+     {
+      "n": 116,
+      "e": 8,
+      "g": 0
+     },
+     {
+      "n": 157,
+      "e": 12,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 444,
+      "e": 288,
+      "g": 2
+     },
+     {
+      "n": 48,
+      "e": 29,
+      "g": 0
+     },
+     {
+      "n": 7,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 23,
+      "e": 7,
+      "g": 0
+     },
+     {
+      "n": 2,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 29,
+      "e": 18,
+      "g": 0
+     },
+     {
+      "n": 22,
+      "e": 16,
+      "g": 0
+     },
+     {
+      "n": 126,
+      "e": 84,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 1061,
+      "e": 379,
+      "g": 99
+     },
+     {
+      "n": 48,
+      "e": 14,
+      "g": 1
+     },
+     {
+      "n": 30,
+      "e": 9,
+      "g": 0
+     },
+     {
+      "n": 5,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 2,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 7,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 19,
+      "e": 5,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 2671,
+      "e": 172,
+      "g": 39
+     },
+     {
+      "n": 271,
+      "e": 32,
+      "g": 2
+     },
+     {
+      "n": 69,
+      "e": 6,
+      "g": 1
+     },
+     {
+      "n": 13,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 49,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 54,
+      "e": 4,
+      "g": 0
+     },
+     {
+      "n": 15,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 62,
+      "e": 3,
+      "g": 1
+     },
+     {
+      "n": 100,
+      "e": 12,
+      "g": 1
+     }
+    ],
+    [
+     {
+      "n": 209,
+      "e": 150,
+      "g": 5
+     },
+     {
+      "n": 47,
+      "e": 30,
+      "g": 1
+     },
+     {
+      "n": 3,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 8,
+      "e": 6,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 6,
+      "e": 5,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 1,
+      "g": 0
+     },
+     {
+      "n": 7,
+      "e": 4,
+      "g": 2
+     },
+     {
+      "n": 25,
+      "e": 21,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 205,
+      "e": 47,
+      "g": 14
+     },
+     {
+      "n": 23,
+      "e": 7,
+      "g": 2
+     },
+     {
+      "n": 3,
+      "e": 3,
+      "g": 0
+     },
+     {
+      "n": 4,
+      "e": 2,
+      "g": 0
+     },
+     {
+      "n": 2,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 1,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 2,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 6,
+      "e": 2,
+      "g": 2
+     },
+     {
+      "n": 10,
+      "e": 2,
+      "g": 0
+     }
+    ],
+    [
+     {
+      "n": 1389,
+      "e": 8,
+      "g": 8
+     },
+     {
+      "n": 315,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 26,
+      "e": 1,
+      "g": 1
+     },
+     {
+      "n": 70,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 3,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 10,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 17,
+      "e": 0,
+      "g": 0
+     },
+     {
+      "n": 208,
+      "e": 3,
+      "g": 3
+     }
+    ]
+   ]
+  }
+ }
+};
+
+const RAMP = ["--ramp-0","--ramp-1","--ramp-2","--ramp-3","--ramp-4","--ramp-5","--ramp-6"];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtPct = x => (100 * x).toFixed(x >= 0.095 ? 0 : 1) + "%";
+const NF = new Intl.NumberFormat("en-US");
+
+const t = DATA.totals;
+document.getElementById("scope").textContent =
+  `${NF.format(t.tickets)} chat conversations · ${DATA.days[0]} to ${DATA.days[DATA.days.length-1]} (UTC)`;
+
+document.getElementById("kpis").innerHTML = [
+  ["Conversations", NF.format(t.tickets), DATA.days.length + " days"],
+  ["Escalated to humans", NF.format(t.escalated), fmtPct(t.escalated / t.tickets) + " of conversations"],
+  ["SOP-gap escalations", NF.format(t.sopGap), fmtPct(t.sopGap / t.escalated) + " of escalations (proxy)"],
+  ["Policy-driven escalations", NF.format(t.escalated - t.sopGap), "escalated via a specific scenario"],
+].map(([l, v, d]) => `<div class="kpi"><div class="eyebrow">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+
+const HINTS = {
+  e: "Cell color = number of escalated conversations",
+  rate: "Cell color = escalated ÷ total conversations in the bucket (min 10 tickets)",
+  g: "Cell color = escalations with no matching rule or scenario (proxy)",
+};
+
+let metric = "e";
+const tip = document.getElementById("tip");
+
+function cellMetric(c) {
+  if (metric === "rate") return c.n >= 10 ? c.e / c.n : null;
+  return metric === "e" ? c.e : c.g;
+}
+
+function luminance(hex) {
+  const v = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function render() {
+  document.getElementById("hint").textContent = HINTS[metric];
+  const ramp = RAMP.map(css);
+  const darkMode = luminance(css("--surface")) < 0.5;
+  const maps = document.getElementById("maps");
+  maps.innerHTML = "";
+  for (const [dim, m] of Object.entries(DATA.matrices)) {
+    let max = 0;
+    for (const row of m.cells) for (const c of row) { const v = cellMetric(c); if (v) max = Math.max(max, v); }
+    const card = document.createElement("div");
+    card.className = "card";
+    const head = `<thead><tr><th></th>${m.cols.map(c => `<th scope="col"><span>${c}</span></th>`).join("")}</tr></thead>`;
+    const body = m.cells.map((row, i) => `<tr><th scope="row">${DATA.rows[i]}</th>` + row.map((c, j) => {
+      const v = cellMetric(c);
+      let bg = "", ink = "var(--muted)", label = "";
+      if (v !== null && v > 0 && max > 0) {
+        const step = Math.min(RAMP.length - 1, Math.floor((v / max) * RAMP.length));
+        bg = ramp[step];
+        const lum = luminance(bg);
+        ink = lum < 0.45 ? "#ffffff" : "#0b0b0b";
+        label = metric === "rate" ? fmtPct(v) : NF.format(v);
+      } else if (v === 0) {
+        label = c.n ? "0" : "";
+      } else if (v === null && c.n) {
+        label = "·";
+      }
+      const style = bg ? ` style="background:${bg};color:${ink}"` : "";
+      return `<td data-d="${dim}" data-i="${i}" data-j="${j}"${style}>${label}</td>`;
+    }).join("") + "</tr>").join("");
+    card.innerHTML = `<h2>Intent × ${m.label}</h2>
+      <div class="hm-scroll"><table class="hm${m.cols.length <= 10 ? " flat" : ""}">${head}<tbody>${body}</tbody></table></div>
+      <div class="legend"><span>0</span><div class="bar"></div><span>${metric === "rate" ? fmtPct(max) : NF.format(max)}</span>
+      <span style="margin-left:auto">${metric === "rate" ? "· = under 10 tickets" : ""}</span></div>`;
+    maps.appendChild(card);
+  }
+}
+
+document.getElementById("metricSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  metric = b.dataset.m;
+  for (const x of e.currentTarget.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+  render();
+});
+
+document.getElementById("maps").addEventListener("mousemove", e => {
+  const td = e.target.closest("td[data-d]");
+  if (!td) { tip.style.display = "none"; return; }
+  const m = DATA.matrices[td.dataset.d];
+  const c = m.cells[+td.dataset.i][+td.dataset.j];
+  tip.innerHTML = `<div class="t">${DATA.rows[+td.dataset.i]} × ${m.cols[+td.dataset.j]}</div>
+    <div class="m">${NF.format(c.n)} conversations · ${NF.format(c.e)} escalated${c.n ? ` (${fmtPct(c.e / Math.max(c.n,1))})` : ""} · ${NF.format(c.g)} SOP-gap${c.n && c.n < 10 ? " · small sample" : ""}</div>`;
+  tip.style.display = "block";
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 8) + "px";
+  tip.style.top = Math.min(e.clientY + 14, innerHeight - r.height - 8) + "px";
+});
+document.getElementById("maps").addEventListener("mouseleave", () => tip.style.display = "none");
+
+// Table view
+{
+  const rows = [];
+  for (const [dim, m] of Object.entries(DATA.matrices))
+    m.cells.forEach((row, i) => row.forEach((c, j) => {
+      if (c.n) rows.push([m.label, `${DATA.rows[i]} × ${m.cols[j]}`, c.n, c.e, c.n ? fmtPct(c.e / c.n) : "", c.g]);
+    }));
+  rows.sort((a, b) => b[3] - a[3]);
+  document.getElementById("dataTable").innerHTML =
+    `<thead><tr><th>Dimension</th><th>Bucket</th><th>Conversations</th><th>Escalated</th><th>Rate</th><th>SOP-gap</th></tr></thead><tbody>` +
+    rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join("")}</tr>`).join("") + "</tbody>";
+}
+
+render();
+if (matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
