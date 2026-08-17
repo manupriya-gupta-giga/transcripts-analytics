@@ -81,7 +81,10 @@
   }
   .wrap { max-width: 1120px; margin: 0 auto; }
 
+  .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+  .page-link { color: var(--c-all); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .page-link:hover { text-decoration: underline; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 18px; }
 
   .filters {
@@ -179,7 +182,10 @@
 </head>
 <body class="viz-root">
 <div class="wrap">
-  <h1>Escalation Rate Around BP Day</h1>
+  <div class="titlebar">
+    <h1>Escalation Rate Around BP Day</h1>
+    <a class="page-link" href="csat_daily.html">Daily CSAT (last 30 days) →</a>
+  </div>
   <p class="subtitle">By intent, from 7 days before to 9 days after the bill-pay day — escalation rate, chat volume, or each intent's contribution to the overall rate. Engaged chats only (the customer sent at least one message), bucketed by US-Eastern day — matching the ops Total Chats sheet. Excludes 11,727 flagged users (1,247 conversations) and 27,337 unengaged chats. Dotted blue line = overall escalation rate reported by the ops dashboard (escalations ÷ total chats; all users, unfiltered; available from Jun 30).</p>
 
   <div class="filters">
