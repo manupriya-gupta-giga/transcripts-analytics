@@ -18,3 +18,6 @@ __pycache__/
 
 # Lightweight per-ticket metadata (pull_ticket_metadata.py)
 ticket_metadata/
+
+# Flagged-user exclusion list (customer PII — fetched fresh from the Sheet)
+exclude_user_ids.txt
