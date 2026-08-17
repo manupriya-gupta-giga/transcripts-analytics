@@ -1,0 +1,14 @@
+# GitLab Pages: publishes the BP-day escalation chart at the project's Pages URL.
+# The chart is a self-contained HTML file, so the job just copies it — no build.
+# Other report pages from results/ are published alongside it under their filenames.
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp results/escalation_rate_timeseries.html public/index.html
+    - cp results/*.html public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
