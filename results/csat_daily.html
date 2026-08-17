@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily CSAT — last 30 days</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --axis:           #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-all:       #2a78d6;
+    --series-contained: #eb6834;
+    --series-escalated: #1baf7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --axis:           #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-all:       #3987e5;
+      --series-contained: #d95926;
+      --series-escalated: #199e70;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-all:       #3987e5;
+    --series-contained: #d95926;
+    --series-escalated: #199e70;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .page { max-width: 1060px; margin: 0 auto; padding: 32px 20px 48px; }
+  header h1 { font-size: 21px; font-weight: 650; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); margin-top: 4px; max-width: 72ch; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+           gap: 12px; margin: 20px 0; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--text-secondary); font-size: 13px; display: flex;
+                 align-items: center; gap: 7px; }
+  .tile .key { width: 14px; height: 0; border-top: 3px solid; border-radius: 2px;
+               display: inline-block; }
+  .tile .value { font-size: 30px; font-weight: 600; margin-top: 2px; }
+  .tile .n { color: var(--text-muted); font-size: 12.5px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border);
+          border-radius: 10px; padding: 18px 18px 12px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; font-weight: 600; }
+  .card .hint { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 10px 0 2px;
+            color: var(--text-secondary); font-size: 12.5px; }
+  .legend .item { display: flex; align-items: center; gap: 7px; }
+  .legend .key { width: 16px; height: 0; border-top: 3px solid; border-radius: 2px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 5; display: none;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 11px; font-size: 12.5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18); min-width: 168px;
+  }
+  .tooltip .tt-date { color: var(--text-secondary); margin-bottom: 4px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+  .tooltip .tt-key { width: 12px; height: 0; border-top: 3px solid; border-radius: 2px;
+                     flex: none; }
+  .tooltip .tt-val { font-weight: 600; }
+  .tooltip .tt-name { color: var(--text-secondary); }
+  .table-controls { margin: 4px 0 16px; }
+  button.toggle {
+    background: var(--surface-1); color: var(--text-secondary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px;
+    font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button.toggle:hover { color: var(--text-primary); }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--grid);
+           font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 600; }
+  td .flag { color: var(--text-muted); font-variant-numeric: normal; }
+  .notes { color: var(--text-muted); font-size: 12.5px; margin-top: 20px; }
+  .notes ul { margin-left: 18px; }
+  .notes li { margin-top: 3px; }
+  .axis-text { fill: var(--text-muted); font-size: 11.5px;
+               font-variant-numeric: tabular-nums; }
+  .end-label { fill: var(--text-secondary); font-size: 12px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Daily CSAT — Customer Support Chat Agent</h1>
+    <p class="sub" id="subtitle"></p>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card">
+    <h2>Daily average CSAT</h2>
+    <p class="hint">Rated chats only (CSAT 1–5). Contained = no create_ticket call;
+      escalated = create_ticket called. Gaps are days excluded or without data.</p>
+    <div class="legend" id="lineLegend"></div>
+    <div class="chart" id="lineChart"><div class="tooltip"></div></div>
+  </section>
+
+  <section class="card">
+    <h2>Rated chats per day</h2>
+    <p class="hint">How many responses each daily average rests on.</p>
+    <div class="legend" id="barLegend"></div>
+    <div class="chart" id="barChart"><div class="tooltip"></div></div>
+  </section>
+
+  <div class="table-controls">
+    <button class="toggle" id="tableToggle" aria-expanded="false">Show data table</button>
+  </div>
+  <section class="card" id="tableCard" hidden>
+    <h2>Daily values</h2>
+    <div class="tablewrap" id="tableWrap"></div>
+  </section>
+
+  <footer class="notes"><ul id="notes"></ul></footer>
+</div>
+
+<script>
+"use strict";
+const DATA = {"agent": "Customer Support Chat Agent", "window": {"start": "2026-07-18", "end": "2026-08-16"}, "generatedAt": "2026-08-17 22:22 UTC", "flaggedUsers": 11727, "excludedConvs": 1014, "excludedDays": ["2026-08-04"], "missingDays": [], "totals": {"all": {"n": 8963, "avg": 4.025}, "contained": {"n": 5055, "avg": 4.043}, "escalated": {"n": 3908, "avg": 4.002}}, "days": [{"date": "2026-07-18", "nConv": 738, "all": {"n": 92, "avg": 4.109}, "contained": {"n": 50, "avg": 3.88}, "escalated": {"n": 42, "avg": 4.381}}, {"date": "2026-07-19", "nConv": 495, "all": {"n": 57, "avg": 4.0}, "contained": {"n": 36, "avg": 3.944}, "escalated": {"n": 21, "avg": 4.095}}, {"date": "2026-07-20", "nConv": 989, "all": {"n": 120, "avg": 3.983}, "contained": {"n": 64, "avg": 4.031}, "escalated": {"n": 56, "avg": 3.929}}, {"date": "2026-07-21", "nConv": 1261, "all": {"n": 128, "avg": 3.891}, "contained": {"n": 74, "avg": 3.838}, "escalated": {"n": 54, "avg": 3.963}}, {"date": "2026-07-22", "nConv": 1295, "all": {"n": 153, "avg": 3.98}, "contained": {"n": 85, "avg": 3.671}, "escalated": {"n": 68, "avg": 4.368}}, {"date": "2026-07-23", "nConv": 1480, "all": {"n": 163, "avg": 4.491}, "contained": {"n": 85, "avg": 4.553}, "escalated": {"n": 78, "avg": 4.423}}, {"date": "2026-07-24", "nConv": 1709, "all": {"n": 208, "avg": 4.043}, "contained": {"n": 111, "avg": 3.991}, "escalated": {"n": 97, "avg": 4.103}}, {"date": "2026-07-25", "nConv": 1029, "all": {"n": 112, "avg": 3.83}, "contained": {"n": 68, "avg": 3.529}, "escalated": {"n": 44, "avg": 4.295}}, {"date": "2026-07-26", "nConv": 856, "all": {"n": 107, "avg": 4.15}, "contained": {"n": 69, "avg": 4.159}, "escalated": {"n": 38, "avg": 4.132}}, {"date": "2026-07-27", "nConv": 1900, "all": {"n": 247, "avg": 4.065}, "contained": {"n": 140, "avg": 4.164}, "escalated": {"n": 107, "avg": 3.935}}, {"date": "2026-07-28", "nConv": 3018, "all": {"n": 489, "avg": 4.059}, "contained": {"n": 306, "avg": 4.016}, "escalated": {"n": 183, "avg": 4.131}}, {"date": "2026-07-29", "nConv": 3366, "all": {"n": 499, "avg": 4.148}, "contained": {"n": 299, "avg": 4.197}, "escalated": {"n": 200, "avg": 4.075}}, {"date": "2026-07-30", "nConv": 3983, "all": {"n": 575, "avg": 4.212}, "contained": {"n": 349, "avg": 4.278}, "escalated": {"n": 226, "avg": 4.111}}, {"date": "2026-07-31", "nConv": 6404, "all": {"n": 859, "avg": 4.107}, "contained": {"n": 481, "avg": 4.229}, "escalated": {"n": 378, "avg": 3.952}}, {"date": "2026-08-01", "nConv": 8943, "all": {"n": 1218, "avg": 4.037}, "contained": {"n": 717, "avg": 4.096}, "escalated": {"n": 501, "avg": 3.952}}, {"date": "2026-08-02", "nConv": 4471, "all": {"n": 573, "avg": 4.082}, "contained": {"n": 354, "avg": 4.158}, "escalated": {"n": 219, "avg": 3.959}}, {"date": "2026-08-03", "nConv": 8299, "all": {"n": 1077, "avg": 4.118}, "contained": {"n": 608, "avg": 4.156}, "escalated": {"n": 469, "avg": 4.068}}, {"date": "2026-08-04", "excluded": true}, {"date": "2026-08-05", "nConv": 8067, "all": {"n": 949, "avg": 3.837}, "contained": {"n": 477, "avg": 3.807}, "escalated": {"n": 472, "avg": 3.867}}, {"date": "2026-08-06", "nConv": 3546, "all": {"n": 377, "avg": 3.639}, "contained": {"n": 177, "avg": 3.446}, "escalated": {"n": 200, "avg": 3.81}}, {"date": "2026-08-07", "nConv": 1833, "all": {"n": 237, "avg": 3.772}, "contained": {"n": 104, "avg": 3.654}, "escalated": {"n": 133, "avg": 3.865}}, {"date": "2026-08-08", "nConv": 943, "all": {"n": 105, "avg": 4.048}, "contained": {"n": 45, "avg": 3.978}, "escalated": {"n": 60, "avg": 4.1}}, {"date": "2026-08-09", "nConv": 604, "all": {"n": 76, "avg": 3.895}, "contained": {"n": 33, "avg": 3.909}, "escalated": {"n": 43, "avg": 3.884}}, {"date": "2026-08-10", "nConv": 927, "all": {"n": 99, "avg": 3.626}, "contained": {"n": 49, "avg": 3.469}, "escalated": {"n": 50, "avg": 3.78}}, {"date": "2026-08-11", "nConv": 668, "all": {"n": 80, "avg": 4.025}, "contained": {"n": 37, "avg": 4.135}, "escalated": {"n": 43, "avg": 3.93}}, {"date": "2026-08-12", "nConv": 600, "all": {"n": 74, "avg": 4.0}, "contained": {"n": 49, "avg": 4.02}, "escalated": {"n": 25, "avg": 3.96}}, {"date": "2026-08-13", "nConv": 732, "all": {"n": 85, "avg": 4.165}, "contained": {"n": 37, "avg": 3.946}, "escalated": {"n": 48, "avg": 4.333}}, {"date": "2026-08-14", "nConv": 1075, "all": {"n": 114, "avg": 3.93}, "contained": {"n": 79, "avg": 3.886}, "escalated": {"n": 35, "avg": 4.029}}, {"date": "2026-08-15", "nConv": 627, "all": {"n": 48, "avg": 3.562}, "contained": {"n": 38, "avg": 3.763}, "escalated": {"n": 10, "avg": 2.8}}, {"date": "2026-08-16", "nConv": 550, "all": {"n": 42, "avg": 3.905}, "contained": {"n": 34, "avg": 3.912}, "escalated": {"n": 8, "avg": 3.875}}]};
+
+const SERIES = [
+  { id: "all",       name: "All rated chats",  cssVar: "--series-all" },
+  { id: "contained", name: "Contained",        cssVar: "--series-contained" },
+  { id: "escalated", name: "Escalated",        cssVar: "--series-escalated" },
+];
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const color = s => css(s.cssVar);
+
+const fmtDay = iso => {
+  const d = new Date(iso + "T00:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+};
+const fmtAvg = v => v == null ? "—" : v.toFixed(2);
+
+function el(tag, attrs, parent) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+// ---------- header, tiles, legends, notes ----------
+function renderStatic() {
+  const w = DATA.window;
+  document.getElementById("subtitle").textContent =
+    `${fmtDay(w.start)} – ${fmtDay(w.end)}, ${new Date(w.end + "T00:00:00Z").getUTCFullYear()}` +
+    ` · chat, production · mirrors the three CSAT charts on the console Metrics View,` +
+    ` recomputed from raw transcripts with flagged users excluded.`;
+
+  const tiles = document.getElementById("tiles");
+  for (const s of SERIES) {
+    const t = DATA.totals[s.id];
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    const label = document.createElement("div");
+    label.className = "label";
+    const key = document.createElement("span");
+    key.className = "key";
+    key.style.borderTopColor = color(s);
+    label.appendChild(key);
+    label.appendChild(document.createTextNode(`Avg CSAT — ${s.name.toLowerCase()}`));
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = fmtAvg(t.avg);
+    const n = document.createElement("div");
+    n.className = "n";
+    n.textContent = `${t.n.toLocaleString()} rated chats over the window`;
+    tile.append(label, value, n);
+    tiles.appendChild(tile);
+  }
+
+  for (const [legendId, list] of [["lineLegend", SERIES], ["barLegend", SERIES.slice(1)]]) {
+    const legend = document.getElementById(legendId);
+    for (const s of list) {
+      const item = document.createElement("span");
+      item.className = "item";
+      const key = document.createElement("span");
+      key.className = "key";
+      key.style.borderTopColor = color(s);
+      item.appendChild(key);
+      item.appendChild(document.createTextNode(s.name));
+      legend.appendChild(item);
+    }
+  }
+
+  const notes = document.getElementById("notes");
+  const li = text => {
+    const node = document.createElement("li");
+    node.textContent = text;
+    notes.appendChild(node);
+  };
+  li(`Excludes ${DATA.flaggedUsers.toLocaleString()} flagged users` +
+     ` (${DATA.excludedConvs.toLocaleString()} conversations removed before aggregation).`);
+  if (DATA.excludedDays.length)
+    li(`${DATA.excludedDays.map(fmtDay).join(", ")} excluded — data flagged inaccurate` +
+       ` (same exclusion as the other reports in this repo).`);
+  if (DATA.missingDays.length)
+    li(`No local transcript data for ${DATA.missingDays.map(fmtDay).join(", ")};` +
+       ` those days are blank, not zero.`);
+  li(`Escalated = the agent called create_ticket during the conversation` +
+     ` (the dashboard's tools.name = create_ticket filter); contained = it did not.`);
+  li(`Averages are over rated chats only (analysis.csat present, 1–5 scale).`);
+  li(`Source: raw per-conversation transcripts for ${DATA.agent}.` +
+     ` Generated ${DATA.generatedAt}.`);
+}
+
+// ---------- shared chart scaffolding ----------
+const M = { top: 14, right: 118, bottom: 30, left: 44 };
+
+function chartFrame(container, height) {
+  const width = Math.max(560, container.clientWidth);
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img" });
+  return { svg, width, height,
+           plotW: width - M.left - M.right, plotH: height - M.top - M.bottom };
+}
+
+function xBand(i, plotW, count) {
+  const step = plotW / count;
+  return { x0: M.left + i * step, cx: M.left + (i + 0.5) * step, step };
+}
+
+function niceTicks(min, max, targetSteps) {
+  for (const step of [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]) {
+    const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+    const n = Math.round((hi - lo) / step);
+    if (n <= targetSteps) {
+      return { lo, hi, ticks: Array.from({ length: n + 1 }, (_, i) => +(lo + i * step).toFixed(4)) };
+    }
+  }
+  return { lo: min, hi: max, ticks: [min, max] };
+}
+
+function attachTooltip(container, svg, count, buildRows) {
+  const tooltip = container.querySelector(".tooltip");
+  const move = evt => {
+    const rect = svg.getBoundingClientRect();
+    const frac = (evt.clientX - rect.left) / rect.width;
+    const width = svg.viewBox.baseVal.width;
+    const x = frac * width;
+    const i = Math.max(0, Math.min(count - 1,
+      Math.floor((x - M.left) / ((width - M.left - M.right) / count))));
+    const shown = buildRows(i, tooltip);
+    if (!shown) { tooltip.style.display = "none"; return; }
+    tooltip.style.display = "block";
+    const cw = container.clientWidth, tw = tooltip.offsetWidth;
+    let left = (x / width) * cw + 14;
+    if (left + tw > cw) left = (x / width) * cw - tw - 14;
+    tooltip.style.left = `${Math.max(0, left)}px`;
+    tooltip.style.top = "26px";
+  };
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("pointerleave", () => { tooltip.style.display = "none"; });
+}
+
+function tooltipRows(tooltip, dateLabel, rows) {
+  tooltip.replaceChildren();
+  const head = document.createElement("div");
+  head.className = "tt-date";
+  head.textContent = dateLabel;
+  tooltip.appendChild(head);
+  for (const r of rows) {
+    const row = document.createElement("div");
+    row.className = "tt-row";
+    if (r.color) {
+      const key = document.createElement("span");
+      key.className = "tt-key";
+      key.style.borderTopColor = r.color;
+      row.appendChild(key);
+    }
+    const val = document.createElement("span");
+    val.className = "tt-val";
+    val.textContent = r.value;
+    const name = document.createElement("span");
+    name.className = "tt-name";
+    name.textContent = r.name;
+    row.append(val, name);
+    tooltip.appendChild(row);
+  }
+}
+
+// ---------- line chart ----------
+function renderLineChart() {
+  const container = document.getElementById("lineChart");
+  container.querySelectorAll("svg").forEach(n => n.remove());
+  const days = DATA.days;
+  const { svg, width, plotH } = chartFrame(container, 320);
+  const plotW = width - M.left - M.right;
+
+  const values = [];
+  for (const d of days) for (const s of SERIES)
+    if (d[s.id] && d[s.id].avg != null) values.push(d[s.id].avg);
+  const pad = 0.15;
+  const dom = niceTicks(Math.max(1, Math.min(...values) - pad),
+                        Math.min(5, Math.max(...values) + pad), 7);
+  const y = v => M.top + plotH - ((v - dom.lo) / (dom.hi - dom.lo)) * plotH;
+
+  for (const t of dom.ticks) {
+    el("line", { x1: M.left, x2: M.left + plotW, y1: y(t), y2: y(t),
+                 stroke: t === dom.ticks[0] ? css("--axis") : css("--grid"),
+                 "stroke-width": 1 }, svg);
+    el("text", { x: M.left - 8, y: y(t) + 4, "text-anchor": "end",
+                 class: "axis-text" }, svg).textContent = t.toFixed(2);
+  }
+  const tickEvery = Math.ceil(days.length / 7);
+  days.forEach((d, i) => {
+    if (i % tickEvery !== 0 && i !== days.length - 1) return;
+    const { cx } = xBand(i, plotW, days.length);
+    el("text", { x: cx, y: M.top + plotH + 20, "text-anchor": "middle",
+                 class: "axis-text" }, svg).textContent = fmtDay(d.date);
+  });
+
+  const crosshair = el("line", { y1: M.top, y2: M.top + plotH, stroke: css("--axis"),
+                                 "stroke-width": 1, visibility: "hidden" }, svg);
+
+  const ends = [];
+  for (const s of SERIES) {
+    const stroke = color(s);
+    let path = "", pen = false, last = null;
+    days.forEach((d, i) => {
+      const v = d[s.id] && d[s.id].avg;
+      if (v == null) { pen = false; return; }
+      const { cx } = xBand(i, plotW, days.length);
+      path += `${pen ? "L" : "M"}${cx.toFixed(1)},${y(v).toFixed(1)}`;
+      pen = true;
+      last = { cx, cy: y(v), v };
+    });
+    el("path", { d: path, fill: "none", stroke, "stroke-width": 2,
+                 "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    if (last) {
+      el("circle", { cx: last.cx, cy: last.cy, r: 4.5, fill: stroke,
+                     stroke: css("--surface-1"), "stroke-width": 2 }, svg);
+      ends.push({ s, stroke, ...last });
+    }
+  }
+  // Direct end labels; nudge apart when they collide and add a leader line.
+  ends.sort((a, b) => a.cy - b.cy);
+  let prevY = -Infinity;
+  for (const e of ends) {
+    let ly = Math.max(e.cy, prevY + 16);
+    ly = Math.min(ly, M.top + plotH);
+    prevY = ly;
+    if (Math.abs(ly - e.cy) > 6)
+      el("line", { x1: e.cx + 7, y1: e.cy, x2: e.cx + 16, y2: ly - 4,
+                   stroke: css("--axis"), "stroke-width": 1 }, svg);
+    el("text", { x: e.cx + 19, y: ly + 4, class: "end-label" }, svg)
+      .textContent = `${fmtAvg(e.v)} ${e.s.name === "All rated chats" ? "All" : e.s.name}`;
+  }
+
+  container.appendChild(svg);
+  attachTooltip(container, svg, days.length, (i, tooltip) => {
+    const d = days[i];
+    const { cx } = xBand(i, plotW, days.length);
+    crosshair.setAttribute("x1", cx); crosshair.setAttribute("x2", cx);
+    crosshair.setAttribute("visibility", "visible");
+    if (d.excluded || d.missing) {
+      tooltipRows(tooltip, fmtDay(d.date),
+        [{ value: d.excluded ? "excluded" : "no data", name: d.excluded ? "(flagged inaccurate)" : "" }]);
+      return true;
+    }
+    tooltipRows(tooltip, `${fmtDay(d.date)} · ${d.all.n} rated`,
+      SERIES.map(s => ({
+        color: color(s),
+        value: fmtAvg(d[s.id].avg),
+        name: `${s.name} (n=${d[s.id].n})`,
+      })));
+    return true;
+  });
+  svg.addEventListener("pointerleave", () => crosshair.setAttribute("visibility", "hidden"));
+}
+
+// ---------- stacked bar chart (rated volume) ----------
+function renderBarChart() {
+  const container = document.getElementById("barChart");
+  container.querySelectorAll("svg").forEach(n => n.remove());
+  const days = DATA.days;
+  const { svg, width, plotH } = chartFrame(container, 240);
+  const plotW = width - M.left - M.right;
+
+  const maxN = Math.max(...days.map(d => d.all ? d.all.n : 0), 1);
+  const dom = niceTicks(0, maxN, 5);
+  const y = v => M.top + plotH - (v / dom.hi) * plotH;
+
+  for (const t of dom.ticks) {
+    el("line", { x1: M.left, x2: M.left + plotW, y1: y(t), y2: y(t),
+                 stroke: t === 0 ? css("--axis") : css("--grid"), "stroke-width": 1 }, svg);
+    el("text", { x: M.left - 8, y: y(t) + 4, "text-anchor": "end",
+                 class: "axis-text" }, svg).textContent = t.toLocaleString();
+  }
+  const tickEvery = Math.ceil(days.length / 7);
+  days.forEach((d, i) => {
+    if (i % tickEvery !== 0 && i !== days.length - 1) return;
+    const { cx } = xBand(i, plotW, days.length);
+    el("text", { x: cx, y: M.top + plotH + 20, "text-anchor": "middle",
+                 class: "axis-text" }, svg).textContent = fmtDay(d.date);
+  });
+
+  const step = plotW / days.length;
+  const barW = Math.min(24, Math.max(3, step - 4));
+  days.forEach((d, i) => {
+    if (!d.all || !d.all.n) return;
+    const { cx } = xBand(i, plotW, days.length);
+    const x = cx - barW / 2;
+    const hCont = (d.contained.n / dom.hi) * plotH;
+    const hEsc = (d.escalated.n / dom.hi) * plotH;
+    const baseY = M.top + plotH;
+    // bottom segment: contained (square base), top: escalated (rounded cap),
+    // separated by a 2px surface gap
+    if (hCont > 0)
+      el("path", { d: roundedColumn(x, baseY - hCont, barW, hCont, hEsc > 0 ? 0 : 4),
+                   fill: css("--series-contained") }, svg);
+    if (hEsc > 0)
+      el("path", { d: roundedColumn(x, baseY - hCont - (hCont > 0 ? 2 : 0) - hEsc,
+                                    barW, hEsc, 4), fill: css("--series-escalated") }, svg);
+  });
+
+  container.appendChild(svg);
+  attachTooltip(container, svg, days.length, (i, tooltip) => {
+    const d = days[i];
+    if (d.excluded || d.missing) {
+      tooltipRows(tooltip, fmtDay(d.date),
+        [{ value: d.excluded ? "excluded" : "no data", name: d.excluded ? "(flagged inaccurate)" : "" }]);
+      return true;
+    }
+    tooltipRows(tooltip, fmtDay(d.date), [
+      { value: d.all.n.toLocaleString(), name: "rated chats" },
+      { color: css("--series-contained"), value: d.contained.n.toLocaleString(), name: "contained" },
+      { color: css("--series-escalated"), value: d.escalated.n.toLocaleString(), name: "escalated" },
+      { value: `${((d.all.n / d.nConv) * 100).toFixed(1)}%`, name: `of ${d.nConv.toLocaleString()} chats rated` },
+    ]);
+    return true;
+  });
+}
+
+function roundedColumn(x, yTop, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  if (r <= 0) return `M${x},${yTop}h${w}v${h}h${-w}Z`;
+  return `M${x},${yTop + r}a${r},${r} 0 0 1 ${r},${-r}h${w - 2 * r}` +
+         `a${r},${r} 0 0 1 ${r},${r}v${h - r}h${-w}Z`;
+}
+
+// ---------- table view ----------
+function renderTable() {
+  const wrap = document.getElementById("tableWrap");
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const h of ["Day", "Rated", "Avg CSAT (all)", "Contained n", "Avg (contained)",
+                   "Escalated n", "Avg (escalated)"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  for (const d of DATA.days) {
+    const tr = document.createElement("tr");
+    const cells = [fmtDay(d.date)];
+    if (d.excluded || d.missing) {
+      const td = document.createElement("td");
+      td.textContent = cells[0];
+      tr.appendChild(td);
+      const note = document.createElement("td");
+      note.colSpan = 6;
+      note.style.textAlign = "left";
+      const flag = document.createElement("span");
+      flag.className = "flag";
+      flag.textContent = d.excluded ? "excluded — data flagged inaccurate" : "no local data";
+      note.appendChild(flag);
+      tr.appendChild(note);
+    } else {
+      cells.push(d.all.n, fmtAvg(d.all.avg), d.contained.n, fmtAvg(d.contained.avg),
+                 d.escalated.n, fmtAvg(d.escalated.avg));
+      for (const c of cells) {
+        const td = document.createElement("td");
+        td.textContent = typeof c === "number" ? c.toLocaleString() : c;
+        tr.appendChild(td);
+      }
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.replaceChildren(table);
+}
+
+document.getElementById("tableToggle").addEventListener("click", evt => {
+  const card = document.getElementById("tableCard");
+  card.hidden = !card.hidden;
+  evt.target.textContent = card.hidden ? "Show data table" : "Hide data table";
+  evt.target.setAttribute("aria-expanded", String(!card.hidden));
+});
+
+function renderCharts() { renderLineChart(); renderBarChart(); }
+renderStatic();
+renderTable();
+renderCharts();
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(renderCharts, 120);
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  document.getElementById("tiles").replaceChildren();
+  document.getElementById("lineLegend").replaceChildren();
+  document.getElementById("barLegend").replaceChildren();
+  document.getElementById("notes").replaceChildren();
+  renderStatic();
+  renderCharts();
+});
+</script>
+</body>
+</html>
