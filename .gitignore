@@ -6,9 +6,15 @@ transcripts/
 # Derived analysis output (regenerate with analyze_transcripts.py)
 escalation_analysis.json
 
+# Raw per-conversation transcript downloads (pull_raw_transcripts.py)
+raw_transcripts/
+
 # Python
 __pycache__/
 *.pyc
 
 # macOS
 .DS_Store
+
+# Lightweight per-ticket metadata (pull_ticket_metadata.py)
+ticket_metadata/

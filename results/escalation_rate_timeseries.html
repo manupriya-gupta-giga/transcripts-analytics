@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escalation Rate Around BP Day</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --page:           #ffffff;
+    --surface-1:      #ffffff;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --axis:           #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --c-all:          #2a78d6;
+    --c-payment:      #e34948;
+    --c-rent:         #eda100;
+    --c-credit:       #008300;
+    --c-appsys:       #eb6834;
+    --c-account:      #1baf7a;
+    --c-flexprod:     #4a3aa7;
+    --c-flexany:      #e87ba4;
+    --c-charge:       #52514e;
+    --c-other:        #b3b1a9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --axis:           #383835;
+      --border:         rgba(255,255,255,0.10);
+      --c-all:          #3987e5;
+      --c-payment:      #e66767;
+      --c-rent:         #c98500;
+      --c-credit:       #008300;
+      --c-appsys:       #d95926;
+      --c-account:      #199e70;
+      --c-flexprod:     #9085e9;
+      --c-flexany:      #d55181;
+      --c-charge:       #c3c2b7;
+      --c-other:        #55534e;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255,255,255,0.10);
+    --c-all:          #3987e5;
+    --c-payment:      #e66767;
+    --c-rent:         #c98500;
+    --c-credit:       #008300;
+    --c-appsys:       #d95926;
+    --c-account:      #199e70;
+    --c-flexprod:     #9085e9;
+    --c-flexany:      #d55181;
+    --c-charge:       #c3c2b7;
+    --c-other:        #55534e;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body.viz-root {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 40px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 18px; }
+
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    margin: 0 0 14px;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-label { font-size: 12px; color: var(--text-muted); }
+  .seg {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-1); padding: 2px; gap: 2px;
+  }
+  .seg button {
+    font: inherit; font-size: 13px; border: 0; background: transparent;
+    color: var(--text-secondary); padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .seg button:hover { color: var(--text-primary); }
+  .seg button[aria-pressed="true"] {
+    background: var(--page); color: var(--text-primary); font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .seg button:focus-visible { outline: 2px solid var(--c-all); outline-offset: 1px; }
+  .filters .spacer { flex: 1; }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 18px 10px;
+  }
+
+  .chart-row { display: flex; gap: 18px; align-items: flex-start; }
+  .chart-box { position: relative; flex: 1; min-width: 0; }
+
+  .legend {
+    display: flex; flex-direction: column; gap: 6px; flex: 0 0 178px;
+    padding-top: 8px;
+  }
+  .legend button {
+    font: inherit; font-size: 13.5px; border: 0; background: transparent; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 9px; text-align: left;
+    color: var(--text-primary); padding: 3px 4px; border-radius: 6px;
+  }
+  .legend button:hover { color: var(--text-primary); background: var(--border); }
+  .legend button:focus-visible { outline: 2px solid var(--c-all); outline-offset: 1px; }
+  .legend .key {
+    width: 22px; height: 6px; border-radius: 3px; display: inline-block; flex: none;
+  }
+  .legend button.off { opacity: 0.38; }
+  .legend button.off .key { background: var(--text-muted) !important; }
+
+  @media (max-width: 760px) {
+    .chart-row { flex-direction: column; }
+    .legend { flex-direction: row; flex-wrap: wrap; flex: none; gap: 4px 14px; padding-top: 0; }
+  }
+
+  svg { display: block; width: 100%; height: auto; }
+  svg:focus-visible { outline: 2px solid var(--c-all); outline-offset: 2px; border-radius: 6px; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+    padding: 8px 10px; font-size: 12px; min-width: 190px; display: none;
+  }
+  .tooltip .tt-title { font-weight: 650; margin-bottom: 6px; color: var(--text-primary); }
+  .tooltip table { border-collapse: collapse; width: 100%; }
+  .tooltip td { padding: 1.5px 0; vertical-align: middle; }
+  .tooltip .tt-key { width: 16px; }
+  .tooltip .tt-key span { display: inline-block; width: 12px; height: 4px; border-radius: 2px; vertical-align: middle; }
+  .tooltip .tt-val { font-weight: 650; color: var(--text-primary); text-align: right; padding-left: 12px; font-variant-numeric: tabular-nums; }
+  .tooltip .tt-name { color: var(--text-secondary); padding-left: 2px; }
+  .tooltip .tt-n { color: var(--text-muted); text-align: right; padding-left: 8px; font-variant-numeric: tabular-nums; }
+
+  .footnote { color: var(--text-muted); font-size: 11.5px; margin: 10px 2px 6px; }
+
+  .tables { display: none; }
+  .tables h2 { font-size: 13px; font-weight: 650; margin: 14px 0 8px; color: var(--text-secondary); }
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table.data {
+    border-collapse: collapse; width: 100%; font-size: 12px; min-width: 900px;
+    background: var(--surface-1);
+  }
+  table.data th, table.data td {
+    padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--grid); white-space: nowrap;
+  }
+  table.data th { color: var(--text-muted); font-weight: 600; }
+  table.data th:first-child, table.data td:first-child {
+    text-align: left; position: sticky; left: 0; background: var(--surface-1);
+  }
+  table.data td:first-child { color: var(--text-secondary); font-weight: 600; }
+  table.data tr:last-child td { border-bottom: 0; }
+  .view-table .tables { display: block; }
+  .view-table .chart-row, .view-table .footnote { display: none; }
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+  <h1>Escalation Rate Around BP Day</h1>
+  <p class="subtitle">By intent, from 7 days before to 9 days after the bill-pay day — escalation rate, chat volume, or each intent's contribution to the overall rate. Excludes 11,727 flagged users (1,248 conversations removed).</p>
+
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label" id="bp-label">BP day</span>
+      <div class="seg" role="group" aria-labelledby="bp-label" id="bp-toggle"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label" id="metric-label">Metric</span>
+      <div class="seg" role="group" aria-labelledby="metric-label" id="metric-toggle">
+        <button type="button" data-metric="rate" aria-pressed="true">Escalation rate</button>
+        <button type="button" data-metric="chats" aria-pressed="false">Chats</button>
+        <button type="button" data-metric="contrib" aria-pressed="false">Contribution</button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="filter-group">
+      <span class="filter-label" id="view-label">View</span>
+      <div class="seg" role="group" aria-labelledby="view-label" id="view-toggle">
+        <button type="button" data-view="chart" aria-pressed="true">Chart</button>
+        <button type="button" data-view="table" aria-pressed="false">Table</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="card">
+    <div class="chart-row">
+      <div class="chart-box" id="chart-box">
+        <svg id="chart" role="img" tabindex="0" aria-label="Escalation rate by intent, t minus 7 to t plus 9 around BP day. Use arrow keys to step through days; values also available in the table view."></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <div class="legend" id="legend" aria-label="Series — click to show or hide"></div>
+    </div>
+    <p class="footnote">Gaps mean no data for that day. User exclusions could not be applied to Jul 1–9 (t+1…t+9 of the Jun 30 window) — no per-user data exists for those days. In the Contribution view, segments are volume-weighted (intent's escalated chats ÷ all chats) and stack to the day's overall rate; "Other" covers chats outside the top 8 intents. Hover or focus the chart and use ←/→ for exact values. Switch to the Table view for all numbers.</p>
+    <div class="tables" id="tables"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const XS = ["T-7","T-6","T-5","T-4","T-3","T-2","T-1","T","T+1","T+2","T+3","T+4","T+5","T+6","T+7","T+8","T+9"];
+const XLAB = ["t-7","t-6","t-5","t-4","t-3","t-2","t-1","t0 (BP)","t+1","t+2","t+3","t+4","t+5","t+6","t+7","t+8","t+9"];
+const DAYS = [
+  { id: "2026-06-30", label: "Jun 30, 2026" },
+  { id: "2026-07-31", label: "Jul 31, 2026" },
+];
+// Fixed hue per intent (matched to the reference chart); color follows the entity.
+const SERIES = [
+  { intent: "ALL",             color: "var(--c-all)", width: 3.5 },
+  { intent: "Payment",         color: "var(--c-payment)" },
+  { intent: "RentToProperty",  color: "var(--c-rent)" },
+  { intent: "CreditAndPricing",color: "var(--c-credit)" },
+  { intent: "AppOrSystem",     color: "var(--c-appsys)" },
+  { intent: "Account",         color: "var(--c-account)" },
+  { intent: "FlexProduct",     color: "var(--c-flexprod)" },
+  { intent: "FlexAnywhere",    color: "var(--c-flexany)" },
+  { intent: "ChargeAndRefund", color: "var(--c-charge)" },
+];
+// Stacked-bar segments for the Contribution view: the 8 intents plus the
+// chats outside them ("Other"), which together sum to the ALL rate.
+const SEGS = SERIES.slice(1).concat([{ intent: "Other", color: "var(--c-other)" }]);
+const RATES = {
+  "2026-06-30": {
+    "ALL": [0.2027,0.165,0.1578,0.1309,0.1322,0.1176,0.1472,0.1434,0.1223,0.0987,0.0891,0.0167,0,0.1373,0.1245,0.1466,0.1643],
+    "Payment": [0.3306,0.4031,0.2865,0.1751,0.2376,0.2205,0.292,0.2282,0.1707,0.1317,0.152,null,null,0.2258,0.1736,0.2069,0.2271],
+    "RentToProperty": [0.2778,0.1091,0.1829,0.1392,0.169,0.1238,0.1708,0.2252,0.2427,0.1808,0.155,null,null,0.2345,0.2805,0.2658,0.34],
+    "CreditAndPricing": [0.037,0.0652,0.0392,0.0889,0.0741,0.0741,0.1094,0.0784,0.0562,0.0592,0.0446,null,null,0,0.05,0.0417,0.12],
+    "AppOrSystem": [0.2105,0.1818,0.4737,0.4,0.3889,0.3077,0.3226,0.2593,0.25,0.3111,0.1515,null,null,0.125,0.375,0,0],
+    "Account": [0.2667,0.2222,0.1579,0.2329,0.2203,0.2895,0.1707,0.1653,0.1677,0.203,0.1522,null,null,0.125,0.5714,0.3529,0.2],
+    "FlexProduct": [0,0.1071,0.0645,0.0833,0.0659,0.0875,0.0095,0.0536,0.0457,0.0501,0.025,null,null,0,0,0.1176,0.1111],
+    "FlexAnywhere": [0.4211,0.125,0.1429,0.1556,0.1556,0.0667,0.129,0.0488,0.0365,0.044,0.0909,null,null,0.1,0.1111,0.1818,0],
+    "ChargeAndRefund": [null,null,null,null,null,null,null,0.7619,0.7164,0.6316,0.6364,null,null,0.6,null,0.5714,null],
+  },
+  "2026-07-31": {
+    "ALL": [0.1562,0.1147,0.1145,0.1379,0.1385,0.1376,0.1338,0.1421,0.1427,0.1306,0.1506,0.1704,0.1823,0.1768,0.1882,0.1739,0.1788],
+    "Payment": [0.3315,0.2576,0.2688,0.2762,0.2736,0.2541,0.2572,0.2334,0.243,0.2523,0.2324,0.2706,0.3046,0.2977,0.2733,0.3036,0.3188],
+    "RentToProperty": [0.1772,0.1818,0.0694,0.1789,0.2414,0.25,0.217,0.2619,0.2267,0.1883,0.2805,0.368,0.3682,0.3192,0.3175,0.2841,0.3043],
+    "CreditAndPricing": [0.0935,0.0843,0.0909,0.1078,0.0704,0.1043,0.0888,0.0687,0.0804,0.0621,0.0886,0.0671,0.0447,0.0753,0.375,0.0833,0.1429],
+    "AppOrSystem": [0.32,0.1739,0.3077,0.4595,0.3784,0.3898,0.4651,0.4159,0.3152,0.4444,0.3516,0.3188,0.3171,0.3182,0.5,0.5455,null],
+    "Account": [0.3333,0.2,0.2222,0.2083,0.3093,0.3469,0.2685,0.2969,0.4034,0.2241,0.2673,0.2696,0.4286,0.2676,0.3704,0.3421,0.25],
+    "FlexProduct": [0.1,0.0408,0.0213,0.0656,0.0558,0.0658,0.069,0.0552,0.0684,0.1081,0.0766,0.0852,0.0588,0.0758,0.1667,0.037,0],
+    "FlexAnywhere": [0.0737,0.102,0.1404,0.1271,0.1778,0.1343,0.1844,0.1292,0.1418,0.125,0.1667,0.1562,0.1681,0.2,0.0625,0.3333,0],
+    "ChargeAndRefund": [null,null,null,null,null,0.5625,0.625,0.6875,0.7126,0.6522,0.5714,0.5952,0.6957,0.6275,0.5606,0.6818,0.381],
+  },
+};
+const COUNTS = {
+  "2026-06-30": {
+    "ALL": [528,612,748,1322,1437,1054,2065,3662,8635,9456,2324,60,26,852,546,573,700],
+    "Payment": [124,129,171,297,362,263,548,942,1769,1921,546,null,null,217,121,174,229],
+    "RentToProperty": [54,55,82,158,142,105,240,484,1949,2008,342,2,null,145,82,79,100],
+    "CreditAndPricing": [27,46,51,90,108,81,128,204,338,338,112,null,null,30,20,24,25],
+    "AppOrSystem": [19,11,19,20,18,13,31,54,120,180,33,null,null,8,8,8,5],
+    "Account": [30,36,38,73,59,38,82,121,167,197,46,null,null,8,7,17,10],
+    "FlexProduct": [13,28,31,72,91,80,105,168,394,339,80,null,null,12,18,17,27],
+    "FlexAnywhere": [19,24,21,45,45,30,62,82,219,341,77,null,null,10,9,11,21],
+    "ChargeAndRefund": [2,null,1,3,1,1,2,21,67,57,22,null,null,10,4,7,3],
+  },
+  "2026-07-31": {
+    "ALL": [1709,1029,856,1900,3018,3366,3983,6404,8943,4471,8299,8910,8067,3546,1833,943,604],
+    "Payment": [359,198,186,362,614,677,836,1397,1642,975,1816,2572,2932,1236,633,303,229],
+    "RentToProperty": [158,110,72,246,348,364,470,943,2056,770,1779,1462,975,401,211,88,46],
+    "CreditAndPricing": [139,83,66,167,284,326,439,553,597,306,474,507,358,93,16,12,7],
+    "AppOrSystem": [50,23,26,37,74,59,86,113,92,54,91,69,41,22,12,11,4],
+    "Account": [51,40,18,72,97,98,108,128,119,58,101,115,63,71,54,38,24],
+    "FlexProduct": [80,49,47,122,215,152,174,326,351,185,274,223,153,66,66,27,25],
+    "FlexAnywhere": [95,49,57,118,135,216,179,240,388,240,426,320,238,90,32,12,10],
+    "ChargeAndRefund": [4,1,4,4,2,16,16,64,87,46,56,42,46,51,66,22,21],
+  },
+};
+// Volume-weighted contribution to the overall rate: intent's escalated chats
+// divided by ALL chats that day. Segments sum to the ALL escalation rate.
+// Computed from raw transcripts with the same user exclusions as RATES.
+const CONTRIB = {
+  "2026-06-30": {
+    "Payment": [0.07765,0.08497,0.06551,0.03933,0.05985,0.05503,0.07748,0.05871,0.03497,0.02676,0.03571,0,0,0.05751,0.03846,0.06283,0.07429],
+    "RentToProperty": [0.02841,0.0098,0.02005,0.01664,0.0167,0.01233,0.01985,0.02977,0.05478,0.03839,0.02281,0.01667,0,0.03991,0.04212,0.03665,0.04857],
+    "CreditAndPricing": [0.00189,0.0049,0.00267,0.00605,0.00557,0.00569,0.00678,0.00437,0.0022,0.00212,0.00215,0,0,0,0.00183,0.00175,0.00429],
+    "AppOrSystem": [0.00758,0.00327,0.01203,0.00605,0.00487,0.0038,0.00484,0.00382,0.00347,0.00592,0.00215,0,0,0.00117,0.00549,0,0],
+    "Account": [0.01515,0.01307,0.00802,0.01286,0.00905,0.01044,0.00678,0.00546,0.00324,0.00423,0.00301,0,0,0.00117,0.00733,0.01047,0.00286],
+    "FlexProduct": [0,0.0049,0.00267,0.00454,0.00418,0.00664,0.00048,0.00246,0.00208,0.0018,0.00086,0,0,0,0,0.00349,0.00429],
+    "FlexAnywhere": [0.01515,0.0049,0.00401,0.0053,0.00487,0.0019,0.00387,0.00109,0.00093,0.00159,0.00301,0,0,0.00117,0.00183,0.00349,0],
+    "ChargeAndRefund": [0.00189,0,0.00134,0.00151,0.0007,0.00095,0.00048,0.00437,0.00556,0.00381,0.00602,0,0,0.00704,0.00549,0.00698,0.00429],
+    "Other": [0.05492,0.03922,0.04144,0.03858,0.02644,0.02087,0.02663,0.03332,0.01506,0.01407,0.01334,0,0,0.02934,0.02198,0.02094,0.02571],
+  },
+  "2026-07-31": {
+    "Payment": [0.06963,0.04956,0.05841,0.05263,0.05567,0.0511,0.05398,0.05091,0.04462,0.05502,0.05085,0.07811,0.1107,0.10378,0.09438,0.09756,0.12086],
+    "RentToProperty": [0.01638,0.01944,0.00584,0.02316,0.02783,0.02704,0.02561,0.03857,0.05211,0.03243,0.06013,0.06038,0.0445,0.0361,0.03655,0.02651,0.02318],
+    "CreditAndPricing": [0.00761,0.0068,0.00701,0.00947,0.00663,0.0101,0.00979,0.00593,0.00537,0.00425,0.00506,0.00382,0.00198,0.00197,0.00327,0.00106,0.00166],
+    "AppOrSystem": [0.00936,0.00389,0.00935,0.00895,0.00928,0.00683,0.01004,0.00734,0.00324,0.00537,0.00386,0.00247,0.00161,0.00197,0.00327,0.00636,0.00497],
+    "Account": [0.00995,0.00777,0.00467,0.00789,0.00994,0.0101,0.00728,0.00593,0.00537,0.00291,0.00325,0.00348,0.00335,0.00536,0.01091,0.01379,0.00993],
+    "FlexProduct": [0.00468,0.00194,0.00117,0.00421,0.00398,0.00297,0.00301,0.00281,0.00268,0.00447,0.00253,0.00213,0.00112,0.00141,0.006,0.00106,0],
+    "FlexAnywhere": [0.0041,0.00486,0.00935,0.00789,0.00795,0.00862,0.00829,0.00484,0.00615,0.00671,0.00856,0.00561,0.00496,0.00508,0.00109,0.00424,0],
+    "ChargeAndRefund": [0.00117,0,0.0035,0.00158,0.00033,0.00267,0.00251,0.00687,0.00693,0.00671,0.00386,0.00281,0.00397,0.00902,0.02019,0.01591,0.01325],
+    "Other": [0.03335,0.02041,0.01519,0.02211,0.0169,0.01812,0.01331,0.01889,0.01621,0.01275,0.01253,0.01156,0.01016,0.01213,0.01255,0.00742,0.00497],
+  },
+};
+
+// Fixed y-domain per metric so toggling BP day never rescales the comparison.
+const METRICS = {
+  rate:    { max: 0.8,   step: 0.1,  data: RATES,
+             fmtTick: v => Math.round(v * 100) + "%", fmtVal: v => (v * 100).toFixed(1) + "%" },
+  chats:   { max: 10000, step: 2000, data: COUNTS,
+             fmtTick: v => String(v), fmtVal: v => String(v) },
+  contrib: { max: 0.25,  step: 0.05, data: CONTRIB,
+             fmtTick: v => Math.round(v * 100) + "%", fmtVal: v => (v * 100).toFixed(2) + " pp" },
+};
+const SVGNS = "http://www.w3.org/2000/svg";
+
+const state = {
+  day: DAYS[0].id,
+  metric: "rate",
+  hidden: new Set(),     // series/segments toggled off in the legend
+  focus: null,           // series highlighted via legend hover
+  hoverIdx: null,        // crosshair / hovered-bar x-index
+};
+
+const svg = document.getElementById("chart");
+const chartBox = document.getElementById("chart-box");
+const tooltip = document.getElementById("tooltip");
+const card = document.getElementById("card");
+
+function el(name, attrs, parent) {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function contribTotal(day, idx) {
+  let sum = 0, any = false;
+  SEGS.forEach(s => {
+    const v = CONTRIB[day][s.intent][idx];
+    if (v != null) { sum += v; any = true; }
+  });
+  return any ? sum : null;
+}
+
+// ---- BP-day toggle (the filter row scopes chart AND tables) ----
+const bpToggle = document.getElementById("bp-toggle");
+DAYS.forEach(d => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = d.label;
+  b.setAttribute("aria-pressed", String(d.id === state.day));
+  b.addEventListener("click", () => {
+    state.day = d.id;
+    state.hoverIdx = null;
+    bpToggle.querySelectorAll("button").forEach((x, i) =>
+      x.setAttribute("aria-pressed", String(DAYS[i].id === d.id)));
+    render();
+    renderTables();
+  });
+  bpToggle.appendChild(b);
+});
+
+// ---- Metric toggle ----
+const metricToggle = document.getElementById("metric-toggle");
+metricToggle.querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    state.metric = b.dataset.metric;
+    state.hoverIdx = null;
+    metricToggle.querySelectorAll("button").forEach(x =>
+      x.setAttribute("aria-pressed", String(x === b)));
+    renderLegend();
+    render();
+  });
+});
+
+// ---- Chart / Table view toggle ----
+const viewToggle = document.getElementById("view-toggle");
+viewToggle.querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    viewToggle.querySelectorAll("button").forEach(x =>
+      x.setAttribute("aria-pressed", String(x === b)));
+    card.classList.toggle("view-table", b.dataset.view === "table");
+  });
+});
+
+// ---- Legend: hover highlights, click toggles; rebuilt per metric because the
+// Contribution view stacks segments (no ALL line, plus an Other bucket) ----
+const legend = document.getElementById("legend");
+function legendEntries() {
+  return state.metric === "contrib" ? SEGS : SERIES;
+}
+function renderLegend() {
+  while (legend.firstChild) legend.removeChild(legend.firstChild);
+  legendEntries().forEach(s => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(!state.hidden.has(s.intent)));
+    b.classList.toggle("off", state.hidden.has(s.intent));
+    const key = document.createElement("span");
+    key.className = "key";
+    key.style.background = s.color;
+    if (s.width) key.style.height = "9px";
+    b.appendChild(key);
+    b.appendChild(document.createTextNode(s.intent));
+    b.addEventListener("click", () => {
+      if (state.hidden.has(s.intent)) state.hidden.delete(s.intent);
+      else state.hidden.add(s.intent);
+      b.classList.toggle("off", state.hidden.has(s.intent));
+      b.setAttribute("aria-pressed", String(!state.hidden.has(s.intent)));
+      render();
+    });
+    b.addEventListener("mouseenter", () => { state.focus = s.intent; applyFocus(); });
+    b.addEventListener("mouseleave", () => { state.focus = null; applyFocus(); });
+    b.addEventListener("focus", () => { state.focus = s.intent; applyFocus(); });
+    b.addEventListener("blur", () => { state.focus = null; applyFocus(); });
+    legend.appendChild(b);
+  });
+}
+
+function applyFocus() {
+  svg.querySelectorAll("[data-intent]").forEach(node => {
+    const dim = state.focus && node.getAttribute("data-intent") !== state.focus;
+    node.setAttribute("opacity", dim ? "0.15" : "1");
+  });
+}
+
+// ---- Chart render ----
+let geom = null; // {xs[], y(v), padL, padR, W, H, plotTop, plotBottom, barW}
+
+function render() {
+  const M = METRICS[state.metric];
+  const bars = state.metric === "contrib";
+  const W = Math.max(560, chartBox.clientWidth || 900);
+  const H = 470;
+  const padL = 54, padR = 14, padT = 14, padB = 56;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  // Lines sit on a point scale; bars on an inset band scale so edge bars
+  // stay inside the plot.
+  const xs = XS.map((_, i) => bars
+    ? padL + (plotW / XS.length) * (i + 0.5)
+    : padL + (i * plotW) / (XS.length - 1));
+  const y = v => padT + plotH * (1 - v / M.max);
+  const barW = Math.min(30, (plotW / XS.length) * 0.6);
+  geom = { xs, y, padL, padR, W, H, plotTop: padT, plotBottom: padT + plotH, barW };
+
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  // Gridlines: solid hairlines, one shade off the surface.
+  for (let v = 0; v <= M.max + 1e-9; v += M.step) {
+    const yy = y(v);
+    el("line", { x1: padL, x2: W - padR, y1: yy, y2: yy,
+      stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, svg);
+    const t = el("text", { x: padL - 8, y: yy + 3.5, "text-anchor": "end",
+      "font-size": 11, fill: "var(--text-muted)",
+      style: "font-variant-numeric: tabular-nums" }, svg);
+    t.textContent = M.fmtTick(v);
+  }
+
+  // BP-day (t0) reference line (behind the marks).
+  const tIdx = XS.indexOf("T");
+  el("line", { x1: xs[tIdx], x2: xs[tIdx], y1: padT, y2: padT + plotH,
+    stroke: "var(--axis)", "stroke-width": 1 }, svg);
+
+  // X labels, rotated like the reference; thin to every other on narrow widths.
+  const step = plotW / (XS.length - 1) < 30 ? 2 : 1;
+  XLAB.forEach((lab, i) => {
+    if (i % step !== 0 && i !== XS.length - 1) return;
+    const lx = xs[i], ly = padT + plotH + 14;
+    const t = el("text", { x: lx, y: ly, "text-anchor": "end",
+      transform: `rotate(-40 ${lx} ${ly})`,
+      "font-size": 11.5, fill: "var(--text-secondary)",
+      style: "font-variant-numeric: tabular-nums" }, svg);
+    t.textContent = lab;
+  });
+
+  if (bars) renderBars(y, xs, barW, padT + plotH);
+  else renderLines(M, y, xs);
+
+  // Crosshair + hover markers (hidden until hover/focus).
+  const hoverG = el("g", { id: "hover-layer", style: "display:none" }, svg);
+  if (!bars) el("line", { id: "crosshair", y1: padT, y2: padT + plotH,
+    stroke: "var(--text-muted)", "stroke-width": 1 }, hoverG);
+
+  applyFocus();
+  if (state.hoverIdx != null) showHover(state.hoverIdx, null);
+}
+
+function renderLines(M, y, xs) {
+  // Series lines (2px; ALL bolder), gaps at nulls, lone points as ringed dots.
+  // Drawn in reverse legend order so ALL lands on top.
+  const data = M.data[state.day];
+  [...SERIES].reverse().forEach(s => {
+    if (state.hidden.has(s.intent)) return;
+    const vals = data[s.intent];
+    const g = el("g", { "data-intent": s.intent }, svg);
+    let d = "", pen = false;
+    vals.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + xs[i].toFixed(1) + " " + y(v).toFixed(1);
+      pen = true;
+    });
+    if (d) el("path", { d, fill: "none", stroke: s.color, "stroke-width": s.width || 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }, g);
+    vals.forEach((v, i) => {
+      if (v == null) return;
+      const isolated = (i === 0 || vals[i - 1] == null) &&
+                       (i === vals.length - 1 || vals[i + 1] == null);
+      if (isolated) {
+        el("circle", { cx: xs[i], cy: y(v), r: 5.5, fill: "var(--surface-1)" }, g);
+        el("circle", { cx: xs[i], cy: y(v), r: 3.5, fill: s.color }, g);
+      }
+    });
+  });
+}
+
+function renderBars(y, xs, barW, baseline) {
+  // Stacked contribution bars: segments in legend order from the baseline up,
+  // 2px surface gaps between fills, 4px rounded cap on the topmost segment.
+  const data = CONTRIB[state.day];
+  const groups = {};
+  SEGS.forEach(s => { groups[s.intent] = el("g", { "data-intent": s.intent }, svg); });
+  for (let i = 0; i < XS.length; i++) {
+    const x0 = xs[i] - barW / 2;
+    let cum = 0;
+    const drawn = [];
+    SEGS.forEach(s => {
+      if (state.hidden.has(s.intent)) return;
+      const v = data[s.intent][i];
+      if (v == null || v <= 0) return;
+      drawn.push({ s, lo: cum, hi: cum + v });
+      cum += v;
+    });
+    drawn.forEach((seg, j) => {
+      const top = j === drawn.length - 1;
+      const yHi = y(seg.hi), yLo = y(seg.lo);
+      const h = Math.max(0.5, yLo - yHi - (j === 0 ? 0 : 2));
+      const yTop = yLo - h;
+      if (top) {
+        const r = Math.min(4, barW / 2, h);
+        el("path", { d: `M${x0} ${yLo} L${x0} ${yTop + r} Q${x0} ${yTop} ${x0 + r} ${yTop} ` +
+          `L${x0 + barW - r} ${yTop} Q${x0 + barW} ${yTop} ${x0 + barW} ${yTop + r} ` +
+          `L${x0 + barW} ${yLo} Z`, fill: seg.s.color }, groups[seg.s.intent]);
+      } else {
+        el("rect", { x: x0, y: yTop, width: barW, height: h, fill: seg.s.color },
+          groups[seg.s.intent]);
+      }
+    });
+  }
+}
+
+// ---- Tooltip: one readout, every visible series at that X; values lead ----
+function showHover(idx, pointerX) {
+  state.hoverIdx = idx;
+  const M = METRICS[state.metric];
+  const bars = state.metric === "contrib";
+  const hoverG = svg.querySelector("#hover-layer");
+  if (!hoverG) return;
+  hoverG.style.display = "";
+  const cx = geom.xs[idx];
+  hoverG.querySelectorAll("circle, rect").forEach(c => c.remove());
+
+  const rows = [];
+  if (bars) {
+    // Outline the hovered stack; list its segments.
+    let total = 0;
+    SEGS.forEach(s => {
+      if (state.hidden.has(s.intent)) return;
+      const v = CONTRIB[state.day][s.intent][idx];
+      if (v == null || v <= 0) return;
+      rows.push({ s, v });
+      total += v;
+    });
+    if (total > 0) {
+      el("rect", { x: cx - geom.barW / 2 - 2.5, y: geom.y(total) - 2.5,
+        width: geom.barW + 5, height: geom.plotBottom - geom.y(total) + 2.5,
+        fill: "none", stroke: "var(--text-muted)", "stroke-width": 1, rx: 5 }, hoverG);
+    }
+  } else {
+    const cross = svg.querySelector("#crosshair");
+    cross.setAttribute("x1", cx);
+    cross.setAttribute("x2", cx);
+    SERIES.forEach(s => {
+      if (state.hidden.has(s.intent)) return;
+      const v = M.data[state.day][s.intent][idx];
+      if (v == null) return;
+      rows.push({ s, v, n: COUNTS[state.day][s.intent][idx] });
+      el("circle", { cx, cy: geom.y(v), r: 5, fill: "var(--surface-1)" }, hoverG);
+      el("circle", { cx, cy: geom.y(v), r: 3, fill: s.color }, hoverG);
+    });
+  }
+  rows.sort((a, b) => b.v - a.v);
+
+  while (tooltip.firstChild) tooltip.removeChild(tooltip.firstChild);
+  const title = document.createElement("div");
+  title.className = "tt-title";
+  let titleText = XLAB[idx] + " · " + DAYS.find(d => d.id === state.day).label;
+  if (bars) {
+    const t = contribTotal(state.day, idx);
+    if (t != null) titleText += " — ALL " + (t * 100).toFixed(1) + "%";
+  }
+  title.textContent = titleText;
+  tooltip.appendChild(title);
+  const table = document.createElement("table");
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    const tdKey = document.createElement("td");
+    tdKey.className = "tt-key";
+    const key = document.createElement("span");
+    key.style.background = r.s.color;
+    tdKey.appendChild(key);
+    const tdName = document.createElement("td");
+    tdName.className = "tt-name";
+    tdName.textContent = r.s.intent;
+    const tdVal = document.createElement("td");
+    tdVal.className = "tt-val";
+    tdVal.textContent = M.fmtVal(r.v);
+    const tdN = document.createElement("td");
+    tdN.className = "tt-n";
+    tdN.textContent = (state.metric === "rate" && r.n != null) ? "n=" + r.n : "";
+    tr.append(tdKey, tdName, tdVal, tdN);
+    table.appendChild(tr);
+  });
+  tooltip.appendChild(table);
+  tooltip.style.display = "block";
+
+  const boxW = chartBox.clientWidth;
+  const scale = boxW / geom.W;
+  const px = pointerX != null ? pointerX : cx * scale;
+  const ttW = tooltip.offsetWidth;
+  let left = px + 14;
+  if (left + ttW > boxW - 4) left = px - ttW - 14;
+  tooltip.style.left = Math.max(4, left) + "px";
+  tooltip.style.top = "24px";
+}
+
+function hideHover() {
+  state.hoverIdx = null;
+  const hoverG = svg.querySelector("#hover-layer");
+  if (hoverG) hoverG.style.display = "none";
+  tooltip.style.display = "none";
+}
+
+svg.addEventListener("pointermove", e => {
+  const rect = svg.getBoundingClientRect();
+  const px = ((e.clientX - rect.left) / rect.width) * geom.W;
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < XS.length; i++) {
+    const d = Math.abs(geom.xs[i] - px);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  showHover(best, e.clientX - rect.left);
+});
+svg.addEventListener("pointerleave", hideHover);
+svg.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    const cur = state.hoverIdx == null ? XS.indexOf("T") : state.hoverIdx;
+    const next = Math.min(XS.length - 1, Math.max(0, cur + (e.key === "ArrowRight" ? 1 : -1)));
+    showHover(next, null);
+  } else if (e.key === "Escape") hideHover();
+});
+svg.addEventListener("focus", () => { if (state.hoverIdx == null) showHover(XS.indexOf("T"), null); });
+svg.addEventListener("blur", hideHover);
+
+// ---- Table view: the WCAG-clean twin (rates, counts, contributions) ----
+function renderTables() {
+  const wrap = document.getElementById("tables");
+  while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+  const dayLabel = DAYS.find(d => d.id === state.day).label;
+  const sections = [
+    ["Escalation rate — BP day " + dayLabel, SERIES, RATES[state.day],
+     v => METRICS.rate.fmtVal(v)],
+    ["Chats (n) — BP day " + dayLabel, SERIES, COUNTS[state.day], v => String(v)],
+    ["Contribution to overall rate (percentage points) — BP day " + dayLabel,
+     SEGS, CONTRIB[state.day], v => (v * 100).toFixed(2)],
+  ];
+  sections.forEach(([caption, seriesList, data, fmt]) => {
+    const h = document.createElement("h2");
+    h.textContent = caption;
+    wrap.appendChild(h);
+    const scroll = document.createElement("div");
+    scroll.className = "table-scroll";
+    const table = document.createElement("table");
+    table.className = "data";
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    const th0 = document.createElement("th");
+    th0.textContent = "Intent";
+    hr.appendChild(th0);
+    XLAB.forEach(x => {
+      const th = document.createElement("th");
+      th.textContent = x;
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    seriesList.forEach(s => {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td");
+      td0.textContent = s.intent;
+      tr.appendChild(td0);
+      data[s.intent].forEach(v => {
+        const td = document.createElement("td");
+        td.textContent = v == null ? "–" : fmt(v);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    if (seriesList === SEGS) {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td");
+      td0.textContent = "ALL (total)";
+      tr.appendChild(td0);
+      XS.forEach((_, i) => {
+        const td = document.createElement("td");
+        const t = contribTotal(state.day, i);
+        td.textContent = t == null ? "–" : (t * 100).toFixed(2);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    wrap.appendChild(scroll);
+  });
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(render, 120);
+});
+
+renderLegend();
+render();
+renderTables();
+</script>
+</body>
+</html>
