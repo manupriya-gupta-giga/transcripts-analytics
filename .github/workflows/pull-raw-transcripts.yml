@@ -1,9 +1,13 @@
-# Nightly pull of raw per-conversation transcripts at 11:59 PM US-Eastern.
+# Daily pull of raw per-conversation transcripts at 7:00 AM US-Pacific,
+# fetching the previous day's complete data (plus a rolling re-pull).
+#
+# At 7 AM PT, yesterday's US-Eastern day ended 10 hours ago (and the UTC day
+# 14-15 hours ago), so T-1 is fully settled including late-finishing chats.
 #
 # GitHub cron runs in UTC, so two schedules cover daylight/standard time and a
-# guard step keeps only the one that is actually 11:59 PM in America/New_York.
+# guard step keeps only the one that is actually 7:00 AM in America/Los_Angeles.
 # Each run re-pulls the last 3 UTC days with `giga tickets download --resume`,
-# so late-finishing conversations are picked up and re-runs are idempotent.
+# so anything missed by an earlier run is picked up and re-runs are idempotent.
 #
 # Required repository secrets:
 #   TRILLIONS_REPO_TOKEN   PAT with read access to GigaML/trillions
@@ -18,8 +22,8 @@ name: Pull raw transcripts
 
 on:
   schedule:
-    - cron: "59 3 * * *"   # 11:59 PM EDT (UTC-4)
-    - cron: "59 4 * * *"   # 11:59 PM EST (UTC-5)
+    - cron: "0 14 * * *"   # 7:00 AM PDT (UTC-7)
+    - cron: "0 15 * * *"   # 7:00 AM PST (UTC-8)
   workflow_dispatch:
     inputs:
       start:
@@ -41,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - name: Keep only the schedule matching 11:59 PM ET
+      - name: Keep only the schedule matching 7:00 AM PT
         id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -51,14 +55,14 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Match on the ET UTC-offset rather than wall-clock time so a
-          # delayed runner start cannot skip the intended nightly run.
-          offset=$(TZ=America/New_York date +%z)
+          # Match on the PT UTC-offset rather than wall-clock time so a
+          # delayed runner start cannot skip the intended daily run.
+          offset=$(TZ=America/Los_Angeles date +%z)
           case "$SCHEDULE|$offset" in
-            "59 3 * * *|-0400"|"59 4 * * *|-0500")
+            "0 14 * * *|-0700"|"0 15 * * *|-0800")
               echo "run=true" >> "$GITHUB_OUTPUT" ;;
             *)
-              echo "Not 11:59 PM ET for this schedule (offset $offset); skipping."
+              echo "Not 7:00 AM PT for this schedule (offset $offset); skipping."
               echo "run=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
@@ -111,6 +115,6 @@ jobs:
             echo "No new transcripts; nothing to commit."
             exit 0
           fi
-          git commit -m "Nightly raw transcripts pull ($(TZ=America/New_York date +%F) ET)"
+          git commit -m "Daily raw transcripts pull ($(TZ=America/Los_Angeles date +%F) PT)"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
