@@ -1,0 +1,116 @@
+# Nightly pull of raw per-conversation transcripts at 11:59 PM US-Eastern.
+#
+# GitHub cron runs in UTC, so two schedules cover daylight/standard time and a
+# guard step keeps only the one that is actually 11:59 PM in America/New_York.
+# Each run re-pulls the last 3 UTC days with `giga tickets download --resume`,
+# so late-finishing conversations are picked up and re-runs are idempotent.
+#
+# Required repository secrets:
+#   TRILLIONS_REPO_TOKEN   PAT with read access to GigaML/trillions
+#                          (used to pip-install giga-sdk from the monorepo)
+#   GIGA_CREDENTIALS_JSON  contents of ~/.giga/credentials.json, e.g.
+#                          {"api_key": "...", "org_id": "...",
+#                           "user_id": "...", "user_email": "..."}
+#   GIGA_ACTIVE_TEAM_JSON  contents of ~/.giga/active_team.json, e.g.
+#                          {"id": "<team-uuid>", "name": "Flex"}
+
+name: Pull raw transcripts
+
+on:
+  schedule:
+    - cron: "59 3 * * *"   # 11:59 PM EDT (UTC-4)
+    - cron: "59 4 * * *"   # 11:59 PM EST (UTC-5)
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First UTC day to pull (YYYY-MM-DD); default 2 days ago"
+        required: false
+      end:
+        description: "Last UTC day to pull (YYYY-MM-DD); default today"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pull-raw-transcripts
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Keep only the schedule matching 11:59 PM ET
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Match on the ET UTC-offset rather than wall-clock time so a
+          # delayed runner start cannot skip the intended nightly run.
+          offset=$(TZ=America/New_York date +%z)
+          case "$SCHEDULE|$offset" in
+            "59 3 * * *|-0400"|"59 4 * * *|-0500")
+              echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "Not 11:59 PM ET for this schedule (offset $offset); skipping."
+              echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install giga CLI
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TRILLIONS_REPO_TOKEN: ${{ secrets.TRILLIONS_REPO_TOKEN }}
+        run: |
+          pip install --quiet \
+            "giga-sdk @ git+https://x-access-token:${TRILLIONS_REPO_TOKEN}@github.com/GigaML/trillions.git#subdirectory=giga-sdk"
+          giga --help > /dev/null
+
+      - name: Write giga credentials
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GIGA_CREDENTIALS_JSON: ${{ secrets.GIGA_CREDENTIALS_JSON }}
+          GIGA_ACTIVE_TEAM_JSON: ${{ secrets.GIGA_ACTIVE_TEAM_JSON }}
+        run: |
+          mkdir -p ~/.giga
+          printf '%s' "$GIGA_CREDENTIALS_JSON" > ~/.giga/credentials.json
+          printf '%s' "$GIGA_ACTIVE_TEAM_JSON" > ~/.giga/active_team.json
+          chmod 600 ~/.giga/credentials.json ~/.giga/active_team.json
+
+      - name: Pull raw transcripts
+        if: steps.gate.outputs.run == 'true'
+        env:
+          INPUT_START: ${{ inputs.start }}
+          INPUT_END: ${{ inputs.end }}
+        run: |
+          START=${INPUT_START:-$(date -u -d '2 days ago' +%F)}
+          END=${INPUT_END:-$(date -u +%F)}
+          echo "Pulling $START .. $END"
+          python3 pull_raw_transcripts.py "$START" "$END" --no-seed
+
+      - name: Commit and push
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raw_transcripts
+          if git diff --cached --quiet; then
+            echo "No new transcripts; nothing to commit."
+            exit 0
+          fi
+          git commit -m "Nightly raw transcripts pull ($(TZ=America/New_York date +%F) ET)"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
